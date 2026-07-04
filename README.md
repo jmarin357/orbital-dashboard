@@ -2,7 +2,7 @@
 
 A real-time 3D satellite tracking dashboard that visualizes the live positions of thousands of Earth-orbiting objects, propagated from actual orbital element data.
 
-**[Live Demo →](#)** *(add your GitHub Pages link here once deployed)*
+**[Live Demo →](#)** *(https://jmarin357.github.io/orbital-dashboard/)*
 
 ![screenshot](screenshot.png)
 *(optional — drop a screenshot or GIF here; see instructions below)*
