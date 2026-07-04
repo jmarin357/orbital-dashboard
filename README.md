@@ -1,3 +1,4 @@
+<img width="1902" height="1073" alt="Screenshot 2026-07-03 182916" src="https://github.com/user-attachments/assets/cd2b1dd9-dc26-438b-834f-5cc668b123ac" />
 # ORBITAL — Satellite Intelligence Dashboard
 
 A real-time 3D satellite tracking dashboard that visualizes the live positions of thousands of Earth-orbiting objects, propagated from actual orbital element data.
