@@ -47,8 +47,4 @@ Then visit `http://localhost:8000`.
 
 ## Why I built this
 
-*(Add a sentence or two here about your motivation — e.g. exploring real-time data pipelines, orbital mechanics, and 3D visualization as part of a BI/data analytics portfolio.)*
-
-## License
-
-MIT — feel free to fork and extend.
+I built a satellite tracking dashboard that visualizes real-time satellite data from CelesTrak, enabling live monitoring of all objects in orbit along with enhanced analytical insights.
