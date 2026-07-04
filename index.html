@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORBITAL — Satellite Operations</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>window.CESIUM_BASE_URL = "https://cdn.jsdelivr.net/npm/cesium@1.119.0/Build/Cesium/";</script>
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.119.0/Build/Cesium/Cesium.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.119.0/Build/Cesium/Widgets/widgets.css">
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<style>
+/* ============================================================
+   ORBITAL — quiet aerospace command center
+   ~95% grayscale · frosted glass · thin borders · Inter
+   ============================================================ */
+:root{
+  --bg-0:#070A0D; --bg-1:#0B1117; --bg-2:#10161D; --bg-3:#141B22;
+  --glass:rgba(20,25,30,.72);
+  --glass-2:rgba(26,32,39,.66);
+  --border:rgba(255,255,255,.06);
+  --border-hi:rgba(255,255,255,.12);
+  --text:#E7ECF2; --muted:#8A94A0; --faint:#566069;
+  --cyan:#7DD6E8; --blue:#5B8DEF; --green:#57C793; --amber:#E8B45A; --red:#E86A6A;
+  --font:'Inter',-apple-system,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --r-lg:22px; --r-md:14px; --r-sm:10px;
+  --ease:cubic-bezier(.32,.72,.24,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg-0);color:var(--text);
+  font-family:var(--font);font-size:13px;font-weight:400;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input{font:inherit}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:1px solid rgba(125,214,232,.6);outline-offset:2px;border-radius:6px}
+
+/* ---------- scene ---------- */
+body{background:radial-gradient(ellipse 80% 60% at 50% 42%, #0A0F15 0%, #070A0D 55%, #050709 100%)}
+#starfield{position:fixed;inset:0;z-index:0}
+#globe{position:fixed;inset:0;z-index:1;background:transparent}
+#globe .cesium-widget, #globe .cesium-widget canvas{background:transparent!important}
+.cesium-viewer-bottom,.cesium-viewer-toolbar,.cesium-widget-credits{display:none!important}
+#scene-fx{position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 44%, transparent 55%, rgba(7,10,13,.62) 100%),
+    linear-gradient(180deg, rgba(7,10,13,.42) 0%, transparent 14%, transparent 78%, rgba(7,10,13,.5) 100%);}
+
+/* ---------- shared glass ---------- */
+.glass{background:linear-gradient(165deg, rgba(27,33,41,.62) 0%, rgba(17,22,28,.76) 100%);
+  backdrop-filter:blur(28px) saturate(1.5) brightness(1.08);
+  -webkit-backdrop-filter:blur(28px) saturate(1.5) brightness(1.08);
+  border-radius:var(--r-lg);
+  box-shadow:0 24px 60px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 0 0 1px rgba(255,255,255,.025)}
+.label{font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.label.xs{font-size:9px;color:var(--faint)}
+.num{font-weight:300;letter-spacing:-.01em}
+.mono{font-family:var(--mono)}
+.hairline{height:1px;background:var(--border);border:none}
+
+/* ---------- top bar ---------- */
+#top{position:fixed;top:0;left:0;right:0;height:56px;z-index:20;
+  display:flex;align-items:center;gap:20px;padding:0 24px;
+  background:linear-gradient(180deg,rgba(7,10,13,.72),rgba(7,10,13,0));
+  pointer-events:none}
+#top>*{pointer-events:auto}
+#brand{display:flex;align-items:center;gap:11px}
+#brand .mark{width:22px;height:22px;border:1px solid rgba(255,255,255,.28);border-radius:50%;position:relative}
+#brand .mark::after{content:"";position:absolute;top:50%;left:50%;width:5px;height:5px;margin:-2.5px;
+  border-radius:50%;background:var(--text)}
+#brand .mark::before{content:"";position:absolute;inset:-5px;border:1px solid rgba(255,255,255,.10);
+  border-radius:50%;clip-path:inset(0 0 52% 0)}
+#brand .t{font-size:13px;font-weight:500;letter-spacing:.26em}
+#brand .s{font-size:9px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase;margin-top:1px}
+#top-tabs{display:flex;gap:4px;margin-left:16px}
+.tab{padding:7px 14px;border-radius:var(--r-sm);font-size:12px;color:var(--muted);transition:.25s var(--ease)}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.tab.on{color:var(--text);background:rgba(255,255,255,.07)}
+.top-spacer{flex:1}
+#clock{text-align:right;line-height:1.25}
+#clock .t{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.04em}
+#clock .d{font-size:9px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase}
+.icon-btn{width:34px;height:34px;display:grid;place-items:center;border-radius:var(--r-sm);
+  color:var(--muted);transition:.25s var(--ease);position:relative}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:5px;height:5px;border-radius:50%;background:var(--amber)}
+svg{display:block}
+
+/* ---------- status card (top-left) ---------- */
+#status-card{position:fixed;top:64px;left:20px;z-index:10;width:210px;padding:14px 16px;
+  border-radius:var(--r-md);animation:rise .5s var(--ease) both;animation-delay:.15s}
+#status-card .row{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px}
+#status-card .row:first-child{margin-top:0}
+#status-card .v{font-family:var(--mono);font-size:11.5px;color:var(--text)}
+#link-state{display:flex;align-items:center;gap:7px;font-size:11.5px}
+#link-state .led{width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 3px rgba(87,199,147,.12)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ---------- left rail ---------- */
+#rail{position:fixed;left:20px;top:200px;bottom:236px;z-index:10;width:196px;
+  display:flex;flex-direction:column;gap:22px;overflow-y:auto;padding-right:6px;
+  animation:rise .5s var(--ease) both;animation-delay:.25s;
+  mask-image:linear-gradient(180deg,#000 92%,transparent);
+  transition:top .3s var(--ease)}
+.rail-sec .label{display:block;margin-bottom:10px}
+.rail-items{display:flex;flex-direction:column;gap:6px}
+.rail-btn{display:flex;align-items:center;gap:11px;padding:4px;border-radius:999px;
+  color:var(--muted);transition:.25s var(--ease);text-align:left}
+.rail-btn .ic{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:var(--glass);
+  backdrop-filter:blur(14px);transition:.25s var(--ease)}
+.rail-btn .nm{font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail-btn .ct{font-family:var(--mono);font-size:10px;color:var(--faint);padding-right:8px}
+.rail-btn:hover{color:var(--text)}
+.rail-btn:hover .ic{background:var(--glass-2)}
+.rail-btn.off{opacity:.38}
+.rail-btn.off .ic{background:rgba(20,25,30,.4)}
+.rail-btn .sw{width:6px;height:6px;border-radius:50%}
+
+/* ---------- search (top center) ---------- */
+#search-wrap{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:20;width:min(400px,44vw)}
+#search{display:flex;align-items:center;gap:10px;height:38px;padding:0 15px;border-radius:999px;
+  background:var(--glass);backdrop-filter:blur(22px);
+  box-shadow:0 14px 34px rgba(0,0,0,.32), 0 0 0 1px rgba(255,255,255,.02) inset;
+  transition:.3s var(--ease)}
+#search:focus-within{background:var(--glass-2)}
+#search svg{opacity:.45;flex:none}
+#search input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:12.5px}
+#search input::placeholder{color:var(--faint)}
+#search kbd{font-family:var(--mono);font-size:9.5px;color:var(--faint);background:rgba(255,255,255,.05);
+  border-radius:5px;padding:2px 6px}
+#results{margin-top:8px;max-height:300px;overflow:auto;padding:6px;border-radius:var(--r-md);display:none}
+#results.open{display:block}
+.sr{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;
+  border-radius:var(--r-sm);cursor:pointer;transition:.15s}
+.sr:hover{background:rgba(255,255,255,.05)}
+.sr .n{font-size:12.5px}
+.sr .m{font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+/* ---------- detail panel (right, flagship) ---------- */
+#detail{position:fixed;top:80px;right:20px;bottom:252px;z-index:15;width:308px;
+  border-radius:var(--r-lg);overflow:hidden;display:flex;flex-direction:column;
+  transform:translateX(24px);opacity:0;pointer-events:none;
+  transition:transform .35s var(--ease),opacity .3s var(--ease)}
+#detail.open{transform:none;opacity:1;pointer-events:auto}
+#detail-top{padding:15px 16px 12px;display:flex;align-items:flex-start;gap:10px;flex:none}
+#detail-top .badge{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:rgba(255,255,255,.06);color:var(--muted)}
+#d-name{font-size:13.5px;font-weight:500;letter-spacing:.02em;line-height:1.3}
+#d-sub{margin-top:2px}
+#d-close{color:var(--faint);width:26px;height:26px;display:grid;place-items:center;border-radius:8px;flex:none}
+#d-close:hover{color:var(--text);background:rgba(255,255,255,.06)}
+#d-tabs{display:flex;gap:2px;padding:0 12px 10px;flex:none}
+.dtab{flex:1;padding:7px 0;border-radius:var(--r-sm);font-size:11px;font-weight:500;
+  letter-spacing:.05em;color:var(--faint);transition:.2s var(--ease)}
+.dtab:hover{color:var(--muted);background:rgba(255,255,255,.04)}
+.dtab.on{color:var(--text);background:rgba(255,255,255,.07)}
+#d-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.dview[hidden]{display:none}
+
+/* collapsible sections */
+.sec{margin:0 12px 8px}
+.sec summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
+  padding:9px 6px;font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);user-select:none}
+.sec summary::-webkit-details-marker{display:none}
+.sec summary::after{content:"";width:6px;height:6px;border-right:1.3px solid var(--faint);
+  border-bottom:1.3px solid var(--faint);transform:rotate(45deg);margin-left:auto;
+  transition:transform .25s var(--ease)}
+.sec[open] summary::after{transform:rotate(-135deg)}
+.d-rows{border-radius:var(--r-sm);overflow:hidden}
+.d-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;font-size:11.5px}
+.d-row:nth-child(odd){background:rgba(255,255,255,.028)}
+.d-row .k{color:var(--muted);flex:none}
+.d-row .v{font-family:var(--mono);font-size:10.5px;text-align:right;min-width:0;overflow-wrap:anywhere}
+.d-row .v .est{color:var(--faint);font-family:var(--font)}
+.d-row .v.na{color:var(--faint);font-family:var(--font);font-style:italic;font-size:10.5px}
+.d-text{font-size:11.5px;line-height:1.65;color:var(--muted);padding:2px 6px 6px}
+.d-text b{color:var(--text);font-weight:500}
+.d-note{margin:6px 18px 14px;font-size:9.5px;line-height:1.55;color:var(--faint)}
+
+/* timeline */
+.tl{position:relative;padding:4px 6px 6px 16px}
+.tl::before{content:"";position:absolute;left:5px;top:10px;bottom:12px;width:1px;
+  background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.03))}
+.tl-item{position:relative;padding:0 0 14px}
+.tl-item::before{content:"";position:absolute;left:-14.5px;top:4px;width:6px;height:6px;border-radius:50%;
+  background:var(--muted);box-shadow:0 0 0 3px rgba(138,148,160,.12)}
+.tl-item.hl::before{background:var(--cyan);box-shadow:0 0 0 3px rgba(125,214,232,.14)}
+.tl-item .tld{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+.tl-item .tlt{font-size:11.5px;margin-top:2px}
+.tl-item .tls{font-size:10.5px;color:var(--muted);margin-top:1px;line-height:1.5}
+
+/* imagery placeholder */
+.img-ph{margin:2px 6px 8px;height:110px;border-radius:var(--r-sm);display:grid;place-items:center;
+  background:linear-gradient(150deg,rgba(255,255,255,.045),rgba(255,255,255,.015));color:var(--faint)}
+.img-ph .t{font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:8px;text-align:center;line-height:1.6}
+
+/* live stat cards */
+#d-facts{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px 12px 4px}
+.fact{padding:10px 11px;border-radius:var(--r-sm);background:rgba(255,255,255,.035);
+  transition:background .3s}
+.fact .fi{display:flex;align-items:center;gap:6px;color:var(--faint);margin-bottom:5px}
+.fact .fl{font-size:8.5px;letter-spacing:.12em;text-transform:uppercase}
+.fact .fv{font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:-.01em}
+.fact .fv small{font-size:9px;color:var(--muted);margin-left:2px}
+.fact.pulse{background:rgba(125,214,232,.07)}
+#d-plain{padding:8px 14px 4px;display:flex;flex-direction:column;gap:7px}
+.plain{display:flex;gap:9px;font-size:11.5px;line-height:1.5;color:var(--muted)}
+.plain i{font-style:normal;flex:none;margin-top:1px}
+.plain b{color:var(--text);font-weight:500}
+
+/* replay */
+#dv-replay{padding:12px 14px}
+#rp-time{font-family:var(--mono);font-size:15px;font-weight:500;text-align:center;letter-spacing:.04em}
+#rp-date{font-size:9.5px;color:var(--faint);text-align:center;letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+#rp-slider{width:100%;margin:16px 0 6px;-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+  background:rgba(255,255,255,.12);outline:none;cursor:pointer}
+#rp-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--amber);box-shadow:0 0 0 4px rgba(232,180,90,.18);cursor:grab}
+#rp-slider::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--amber);border:none}
+#rp-marks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint)}
+#rp-controls{display:flex;justify-content:center;gap:6px;margin-top:14px}
+.rp-btn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--muted);
+  background:rgba(255,255,255,.05);transition:.2s var(--ease)}
+.rp-btn:hover{color:var(--text);background:rgba(255,255,255,.09)}
+.rp-btn.main{width:44px;height:44px;background:rgba(232,180,90,.14);color:var(--amber)}
+.rp-btn.main:hover{background:rgba(232,180,90,.22)}
+#rp-speed{margin-top:12px;display:flex;justify-content:center;gap:4px}
+.sp-btn{padding:5px 10px;border-radius:999px;font-family:var(--mono);font-size:10px;color:var(--faint);
+  background:rgba(255,255,255,.04);transition:.2s}
+.sp-btn:hover{color:var(--muted)}
+.sp-btn.on{color:var(--amber);background:rgba(232,180,90,.13)}
+#rp-hint{margin-top:14px;font-size:10px;line-height:1.6;color:var(--faint);text-align:center}
+
+.d-actions{display:flex;gap:8px;padding:11px 14px 14px;flex:none}
+.btn{flex:1;height:34px;border-radius:var(--r-sm);
+  background:rgba(255,255,255,.045);font-size:11.5px;font-weight:500;letter-spacing:.04em;
+  transition:.25s var(--ease);color:var(--muted)}
+.btn:hover{color:var(--text);background:rgba(255,255,255,.08)}
+.btn.on{color:var(--green);background:rgba(87,199,147,.1)}
+
+/* ---------- full-screen views (Constellations / Conjunctions) ---------- */
+.fsview{position:fixed;top:64px;left:20px;right:20px;bottom:20px;z-index:18;
+  display:flex;flex-direction:column;padding:22px 26px;
+  opacity:0;pointer-events:none;transform:translateY(14px);
+  transition:opacity .3s var(--ease),transform .35s var(--ease)}
+.fsview.open{opacity:1;pointer-events:auto;transform:none}
+.fs-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex:none}
+.fs-head h2{font-size:16px;font-weight:500;letter-spacing:.04em}
+.fs-head .sub{font-size:11px;color:var(--faint)}
+.fs-badge{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:4px 10px;
+  border-radius:999px;color:var(--amber);background:rgba(232,180,90,.1)}
+.fs-scroll{flex:1;min-height:0;overflow:auto;margin-top:12px}
+.fs-table{width:100%;border-collapse:collapse;font-size:12px}
+.fs-table th{position:sticky;top:0;text-align:left;padding:9px 12px;font-size:9.5px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  background:rgba(17,22,28,.9);backdrop-filter:blur(8px);cursor:pointer;user-select:none;white-space:nowrap}
+.fs-table th.sorted{color:var(--text)}
+.fs-table th .arr{font-size:8px;margin-left:4px}
+.fs-table td{padding:10px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
+.fs-table td.nm{font-family:var(--font);font-size:12px;white-space:normal}
+.fs-table tbody tr{cursor:pointer;transition:background .15s}
+.fs-table tbody tr:nth-child(odd){background:rgba(255,255,255,.022)}
+.fs-table tbody tr:hover{background:rgba(255,255,255,.055)}
+.risk{display:inline-block;padding:2px 8px;border-radius:999px;font-size:9.5px}
+.risk.hi{color:var(--red);background:rgba(232,106,106,.12)}
+.risk.md{color:var(--amber);background:rgba(232,180,90,.12)}
+.risk.lo{color:var(--green);background:rgba(87,199,147,.1)}
+
+#recenter{position:fixed;right:47px;bottom:346px;z-index:10;width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);
+  transition:.25s var(--ease);animation:rise .5s var(--ease) both;animation-delay:.38s}
+#recenter:hover{color:var(--text)}
+#recenter:active{transform:scale(.92)}
+
+/* ---------- rotate dial (bottom right of globe area) ---------- */
+#dial{position:fixed;right:36px;bottom:252px;z-index:10;width:86px;height:86px;border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);
+  background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.07), rgba(20,25,30,.62));
+  backdrop-filter:blur(16px);box-shadow:0 14px 34px rgba(0,0,0,.32);
+  transition:.3s var(--ease);animation:rise .5s var(--ease) both;animation-delay:.4s}
+#dial::before{content:"";position:absolute;inset:9px;border-radius:50%;border:1px dashed rgba(255,255,255,.1);
+  transition:transform 1s linear}
+#dial.spinning::before{animation:dialspin 9s linear infinite}
+@keyframes dialspin{to{transform:rotate(360deg)}}
+#dial:hover{color:var(--text)}
+#dial span{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase}
+#dial .compass{position:absolute;inset:-2px;font-size:8px;color:var(--faint)}
+#dial .compass i{position:absolute;font-style:normal}
+#dial .compass .n{top:-14px;left:50%;transform:translateX(-50%)}
+#dial .compass .s{bottom:-14px;left:50%;transform:translateX(-50%)}
+#dial .compass .e{right:-12px;top:50%;transform:translateY(-50%)}
+#dial .compass .w{left:-13px;top:50%;transform:translateY(-50%)}
+
+/* ---------- bottom deck ---------- */
+#deck{position:fixed;left:20px;right:20px;bottom:20px;height:216px;z-index:12;
+  display:grid;grid-template-columns:236px 1.35fr 1.5fr;gap:14px;
+  transition:transform .4s var(--ease)}
+#deck.hidden{transform:translateY(252px)}
+.deck-panel{border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;min-width:0;
+  animation:rise .55s var(--ease) both}
+.deck-panel:nth-child(1){animation-delay:.3s}
+.deck-panel:nth-child(2){animation-delay:.38s}
+.deck-panel:nth-child(3){animation-delay:.46s}
+.deck-h{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex:none}
+
+/* focus panel (left) */
+#focus-name{font-size:12px;font-weight:500;letter-spacing:.06em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+#focus-metrics{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center}
+.fm .v{font-size:24px;font-weight:300;letter-spacing:-.02em;line-height:1.05}
+.fm .v small{font-size:11px;color:var(--muted);font-weight:400;margin-left:4px}
+.fm .l{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+#focus-empty{flex:1;display:grid;place-items:center;color:var(--faint);font-size:11.5px;text-align:center;line-height:1.6}
+
+/* table panel (center) */
+#tbl-tabs{display:flex;gap:4px}
+#tbl-tabs .tab{padding:5px 11px;font-size:11px}
+#tbl-search{margin-left:auto;display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;
+  border-radius:999px;background:rgba(255,255,255,.045)}
+#tbl-search input{width:110px;background:none;border:none;outline:none;color:var(--text);font-size:11.5px}
+#tbl-search input::placeholder{color:var(--faint)}
+#tbl{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.trow{display:grid;grid-template-columns:64px 1fr 74px 70px 64px;gap:10px;align-items:center;
+  padding:7px 8px;border-radius:var(--r-sm);font-size:11.5px;cursor:pointer;transition:.15s}
+.trow:hover{background:rgba(255,255,255,.045)}
+.trow.head{cursor:default;color:var(--faint);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding-bottom:9px}
+.trow.head:hover{background:none}
+.trow .id{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.trow .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .r{font-family:var(--mono);font-size:10.5px;text-align:right}
+.trow .st{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted)}
+.trow .st i{width:5px;height:5px;border-radius:50%;font-style:normal}
+#tbl-foot{display:flex;align-items:center;gap:12px;padding-top:10px;flex:none;font-size:11px;color:var(--muted)}
+#tbl-foot .pg{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pg-btn{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;color:var(--muted);
+  background:rgba(255,255,255,.04);transition:.2s}
+.pg-btn:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.pg-btn:disabled{opacity:.3;cursor:default}
+
+/* chart panel (right) */
+#chart-toggle{margin-left:auto;display:flex;gap:4px}
+#chart-legend{display:flex;gap:14px;margin-left:14px}
+#chart-legend .lg{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+#chart-legend .lg i{width:14px;height:2px;border-radius:2px;font-style:normal}
+.chart-wrap{flex:1;min-height:0;position:relative}
+#deck-toggle{position:fixed;right:28px;bottom:246px;z-index:13;width:34px;height:22px;border-radius:8px 8px 0 0;
+  display:none}
+
+/* collapse handle */
+#deck-handle{position:fixed;left:50%;bottom:242px;transform:translateX(-50%);z-index:13;
+  width:44px;height:20px;border-radius:8px;display:grid;place-items:center;color:var(--faint);
+  background:var(--glass);backdrop-filter:blur(12px);box-shadow:0 8px 20px rgba(0,0,0,.3);
+  transition:bottom .4s var(--ease)}
+#deck-handle:hover{color:var(--text)}
+#deck.hidden ~ #deck-handle{bottom:10px}
+#deck-handle svg{transition:transform .35s}
+#deck.hidden ~ #deck-handle svg{transform:rotate(180deg)}
+
+/* ---------- tooltip / hud / toast ---------- */
+#tooltip{position:fixed;z-index:40;pointer-events:none;display:none;padding:9px 13px;
+  border-radius:var(--r-sm);font-size:11px;line-height:1.5;white-space:nowrap;
+  background:rgba(16,22,29,.88);backdrop-filter:blur(16px);
+  box-shadow:0 10px 28px rgba(0,0,0,.4)}
+#tooltip .tn{font-weight:500}
+#tooltip .tm{color:var(--muted);font-family:var(--mono);font-size:10px;margin-top:2px}
+#follow-hud{position:fixed;top:64px;right:300px;z-index:16;display:none;align-items:center;gap:9px;
+  padding:8px 14px;border-radius:999px;font-size:11px;letter-spacing:.08em}
+#follow-hud.on{display:flex}
+#follow-hud .rec{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.3}}
+#toasts{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;
+  display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{padding:9px 18px;border-radius:999px;font-size:12px;display:flex;gap:9px;align-items:center;
+  animation:rise .35s var(--ease)}
+
+/* ---------- loader ---------- */
+#loader{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:26px;transition:opacity .7s var(--ease);
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 40%, #10161D 0%, transparent 70%),
+    linear-gradient(180deg,#070A0D,#0B1117)}
+#loader.done{opacity:0;pointer-events:none}
+#loader .orb{width:64px;height:64px;border-radius:50%;position:relative;
+  border:1px solid rgba(255,255,255,.14)}
+#loader .orb::before{content:"";position:absolute;inset:-1px;border-radius:50%;
+  border:1px solid transparent;border-top-color:rgba(231,236,242,.75);animation:lspin 1.4s linear infinite}
+#loader .orb::after{content:"";position:absolute;top:50%;left:50%;width:6px;height:6px;margin:-3px;
+  border-radius:50%;background:var(--text)}
+@keyframes lspin{to{transform:rotate(360deg)}}
+#loader h1{font-size:13px;font-weight:500;letter-spacing:.5em;text-indent:.5em}
+#load-status{font-size:11px;color:var(--faint);min-height:16px;letter-spacing:.04em}
+#load-track{width:220px;height:2px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
+#load-fill{height:100%;width:0%;background:rgba(231,236,242,.7);transition:width .35s var(--ease)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ---------- large displays (QHD/4K/ultrawide) ----------
+   Scale core dimensions up so the UI keeps its proportions instead of
+   floating as small panels in a huge viewport. All effects are vector /
+   procedural, so nothing rasterizes or softens at these sizes. */
+@media (min-width:2200px){
+  body{font-size:15px}
+  :root{--r-lg:26px;--r-md:16px}
+  #top{height:68px;padding:0 32px}
+  #brand .t{font-size:15px}
+  #clock .t{font-size:15px}
+  #search-wrap{width:min(520px,40vw);top:80px}
+  #search{height:44px}
+  #status-card{width:250px;top:82px;left:28px}
+  #rail{left:28px;width:230px}
+  .rail-btn .ic{width:40px;height:40px}
+  .rail-btn .nm{font-size:13.5px}
+  #detail{width:360px;top:96px;right:28px;bottom:310px}
+  #d-name{font-size:15.5px}
+  .d-row{padding:12px 22px;font-size:13px}
+  .d-row .v{font-size:12.5px}
+  #deck{left:28px;right:28px;bottom:28px;height:264px;grid-template-columns:300px 1.3fr 1.5fr;gap:18px}
+  #deck.hidden{transform:translateY(304px)}
+  .deck-panel{padding:20px 24px}
+  .fm .v{font-size:30px}
+  .trow{grid-template-columns:80px 1fr 90px 84px 78px;font-size:13px;padding:9px 10px}
+  #dial{width:104px;height:104px;right:44px;bottom:312px}
+  #recenter{width:40px;height:40px;right:76px;bottom:428px}
+  #deck-handle{bottom:298px}
+  #deck.hidden ~ #deck-handle{bottom:12px}
+  #tooltip{font-size:12.5px;padding:11px 15px}
+}
+@media (max-width:1180px){
+  #deck{grid-template-columns:200px 1fr}
+  .deck-panel:nth-child(3){display:none}
+  #rail{width:56px;top:76px!important}
+  .rail-btn .nm,.rail-btn .ct{display:none}
+  #status-card{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="orb"></div>
+  <h1>ORBITAL</h1>
+  <div id="load-track"><div id="load-fill"></div></div>
+  <div id="load-status">Initializing render core</div>
+</div>
+
+<canvas id="starfield"></canvas>
+<div id="globe"></div>
+<div id="scene-fx"></div>
+
+<!-- top bar -->
+<header id="top">
+  <div id="brand">
+    <div class="mark"></div>
+    <div><div class="t">ORBITAL</div><div class="s">Satellite Operations</div></div>
+  </div>
+  <nav id="top-tabs">
+    <button class="tab on" data-view="overview">Overview</button>
+    <button class="tab" data-view="constellations">Constellations</button>
+    <button class="tab" data-view="conjunctions">Conjunctions</button>
+  </nav>
+  <div class="top-spacer"></div>
+  <button class="icon-btn" id="btn-deck" title="Toggle analytics (A)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 20h18M6 16v-5m5 5V6m5 10v-8"/></svg>
+  </button>
+  <button class="icon-btn" id="btn-full" title="Fullscreen (Shift+F)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+  </button>
+  <div id="clock"><div class="t" id="clock-t">--:--:--</div><div class="d" id="clock-d">UTC</div></div>
+</header>
+
+<!-- search -->
+<div id="search-wrap">
+  <div id="search">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="search-input" type="text" placeholder="Search satellites, NORAD ID" autocomplete="off"/>
+    <kbd>/</kbd>
+  </div>
+  <div id="results" class="glass"></div>
+</div>
+
+<!-- status card -->
+<section id="status-card" class="glass">
+  <div class="row"><span class="label xs">Link</span><span id="link-state"><span class="led"></span><span id="link-label">Acquiring</span></span></div>
+  <hr class="hairline" style="margin:11px 0">
+  <div class="row"><span class="label xs">Catalog</span><span class="v" id="sc-total">—</span></div>
+  <div class="row"><span class="label xs">Displayed</span><span class="v" id="sc-visible">—</span></div>
+  <div class="row"><span class="label xs">Avg altitude</span><span class="v" id="sc-alt">—</span></div>
+  <div class="row"><span class="label xs">Avg velocity</span><span class="v" id="sc-vel">—</span></div>
+  <div id="tle-load-row" style="display:none;margin-top:12px">
+    <button class="btn" id="btn-tle" style="width:100%;height:30px;font-size:11px" title="Download the TLE file from celestrak.org, then load or drop it here">Load TLE file</button>
+  </div>
+  <input type="file" id="tle-file" accept=".txt,.tle" style="display:none">
+</section>
+
+<!-- left rail -->
+<aside id="rail">
+  <div class="rail-sec">
+    <span class="label">Filters</span>
+    <div class="rail-items" id="rail-cats"></div>
+  </div>
+  <div class="rail-sec">
+    <span class="label">Alerts</span>
+    <div class="rail-items" id="rail-alerts" style="gap:10px"></div>
+  </div>
+</aside>
+
+<!-- detail panel -->
+<section id="detail" class="glass">
+  <div id="detail-top">
+    <div class="badge">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 7 9 3 3 9l4 4m6-6 4 4m-4-4-6 6m10-2 4 4-6 6-4-4m6-6-6 6m-4-4 1.5-1.5"/></svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div id="d-name">—</div>
+      <div id="d-sub" class="label xs"></div>
+    </div>
+    <button id="d-close" title="Close (Esc)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div id="d-tabs">
+    <button class="dtab on" data-t="overview">Overview</button>
+    <button class="dtab" data-t="live">Live</button>
+    <button class="dtab" data-t="replay">Replay</button>
+  </div>
+
+  <div id="d-body">
+    <!-- OVERVIEW -->
+    <div class="dview" id="dv-overview">
+      <details class="sec" open>
+        <summary>General information</summary>
+        <div class="d-rows" id="d-general"></div>
+      </details>
+      <details class="sec" open>
+        <summary>Mission overview</summary>
+        <div class="d-text" id="d-summary"></div>
+      </details>
+      <details class="sec">
+        <summary>Mission timeline</summary>
+        <div class="tl" id="d-timeline"></div>
+      </details>
+      <details class="sec">
+        <summary>Imagery</summary>
+        <div class="img-ph" id="d-image"></div>
+      </details>
+      <div class="d-note">Sources: CelesTrak GP element sets and orbital mechanics derived from them. Fields absent from open TLE metadata are marked unavailable; heuristic values are labeled <span style="font-style:italic">est.</span> Nothing on this panel is fabricated.</div>
+    </div>
+
+    <!-- LIVE -->
+    <div class="dview" id="dv-live" hidden>
+      <div id="d-facts"></div>
+      <div id="d-plain"></div>
+      <div style="padding:10px 14px 6px">
+        <button class="btn" id="d-pass" style="width:100%">Predict next pass over my location</button>
+        <div class="d-text" id="d-pass-out" style="padding-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- REPLAY -->
+    <div class="dview" id="dv-replay" hidden>
+      <div style="padding-top:6px">
+        <div id="rp-time">--:--:--</div>
+        <div id="rp-date">—</div>
+      </div>
+      <input type="range" id="rp-slider" min="0" max="1000" value="1000">
+      <div id="rp-marks"><span id="rp-t0">—</span><span id="rp-t1">now</span></div>
+      <div id="rp-controls">
+        <button class="rp-btn" id="rp-rw" title="Back 5 min">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg>
+        </button>
+        <button class="rp-btn main" id="rp-play" title="Play / pause">
+          <svg id="rp-play-ic" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button class="rp-btn" id="rp-stop" title="Stop / reset">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+        </button>
+        <button class="rp-btn" id="rp-ff" title="Forward 5 min">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m13 17 5-5-5-5M6 17l5-5-5-5"/></svg>
+        </button>
+      </div>
+      <div id="rp-speed">
+        <button class="sp-btn" data-s="1">1×</button>
+        <button class="sp-btn" data-s="10">10×</button>
+        <button class="sp-btn on" data-s="60">60×</button>
+        <button class="sp-btn" data-s="300">300×</button>
+      </div>
+      <div id="rp-hint">Replaying the previous full orbit, propagated with SGP4 from the current element set. The amber track is history; the white track is the live orbit.</div>
+    </div>
+  </div>
+
+  <div class="d-actions">
+    <button class="btn" id="d-fly">Fly to</button>
+    <button class="btn" id="d-follow">Follow</button>
+  </div>
+</section>
+
+<!-- full-screen: Constellations -->
+<section id="view-constellations" class="fsview glass">
+  <div class="fs-head">
+    <h2>Constellations</h2>
+    <span class="sub">Fleet comparison computed live from the current catalog</span>
+  </div>
+  <div class="fs-scroll"><table class="fs-table" id="const-table"></table></div>
+</section>
+
+<!-- full-screen: Conjunctions -->
+<section id="view-conjunctions" class="fsview glass">
+  <div class="fs-head">
+    <h2>Conjunctions</h2>
+    <span class="sub">Close-approach screening queue · click a column to sort, a row to inspect</span>
+    <span class="fs-badge">SIMULATED SCREENING</span>
+  </div>
+  <div class="fs-scroll"><table class="fs-table" id="conj-table"></table></div>
+</section>
+
+<!-- recenter -->
+<button id="recenter" class="glass" title="Recenter Earth (Home)">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M12 3v3.2M12 17.8V21M3 12h3.2M17.8 12H21"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+</button>
+
+<!-- rotate dial -->
+<button id="dial" class="spinning" title="Toggle ambient rotation">
+  <div class="compass"><i class="n">N</i><i class="s">S</i><i class="e">E</i><i class="w">W</i></div>
+  <span id="dial-label">Rotate</span>
+</button>
+
+<!-- bottom deck -->
+<section id="deck">
+  <div class="deck-panel glass" id="p-focus">
+    <div class="deck-h"><span class="label xs" style="flex:none">Focus</span><span id="focus-name" class="mono" style="color:var(--muted)">—</span></div>
+    <div id="focus-empty">Select a satellite<br>to open live telemetry</div>
+    <div id="focus-metrics" style="display:none">
+      <div class="fm"><div class="v num" id="f-vel">—</div><div class="l">Current velocity</div></div>
+      <div class="fm"><div class="v num" id="f-alt">—</div><div class="l">Altitude</div></div>
+      <div class="fm"><div class="v num" id="f-per">—</div><div class="l">Orbital period</div></div>
+    </div>
+  </div>
+
+  <div class="deck-panel glass" id="p-table">
+    <div class="deck-h">
+      <div id="tbl-tabs">
+        <button class="tab on" data-mode="visible">Tracked <span class="mono" id="tbl-count" style="font-size:10px;color:var(--faint)"></span></button>
+        <button class="tab" data-mode="leo">LEO</button>
+        <button class="tab" data-mode="geo">GEO</button>
+      </div>
+      <div id="tbl-search">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="opacity:.4"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="tbl-q" placeholder="Filter" autocomplete="off">
+      </div>
+    </div>
+    <div id="tbl">
+      <div class="trow head"><span>NORAD</span><span>Name</span><span style="text-align:right">Alt km</span><span style="text-align:right">Vel km/s</span><span>Status</span></div>
+      <div id="tbl-rows" style="flex:1"></div>
+    </div>
+    <div id="tbl-foot">
+      <span id="tbl-range">—</span>
+      <div class="pg">
+        <span class="mono" style="font-size:10px" id="tbl-page">01</span>
+        <button class="pg-btn" id="pg-prev"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="pg-btn" id="pg-next"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="deck-panel glass" id="p-chart">
+    <div class="deck-h">
+      <span class="label xs">Fleet distribution</span>
+      <div id="chart-legend"></div>
+      <div id="chart-toggle">
+        <button class="tab on" data-c="alt">Altitude</button>
+        <button class="tab" data-c="inc">Inclination</button>
+        <button class="tab" data-c="vel">Velocity</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="c-main"></canvas></div>
+  </div>
+</section>
+<button id="deck-handle" title="Toggle analytics (A)">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 9 6 6 6-6"/></svg>
+</button>
+
+<div id="tooltip"></div>
+<div id="follow-hud" class="glass"><span class="rec"></span><span>Tracking</span><span id="follow-name" style="color:var(--text)"></span></div>
+<div id="toasts"></div>
+
+<script>
+/* ============================================================
+   ORBITAL — engine
+   Data: CelesTrak GP (TLE) · SGP4 via satellite.js · CesiumJS
+   ============================================================ */
+(() => {
+"use strict";
+
+const TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle";
+const MAX_SATS = 9000, PROP_INTERVAL_MS = 1000, PROP_CHUNK = 900, EARTH_R = 6371;
+
+/* Quiet palette: almost everything is grayscale; accents mark meaning only */
+const CATEGORIES = [
+  { id:"starlink", label:"Starlink",      dot:"#9AA6B2", m:n=>n.startsWith("STARLINK") },
+  { id:"oneweb",   label:"OneWeb",        dot:"#9AA6B2", m:n=>n.startsWith("ONEWEB") },
+  { id:"gps",      label:"Navigation",    dot:"#7DD6E8", m:n=>/NAVSTAR|GPS|GLONASS|GALILEO|BEIDOU|IRNSS|QZS/.test(n) },
+  { id:"weather",  label:"Weather",       dot:"#E8B45A", m:n=>/NOAA|GOES|METEOSAT|METOP|HIMAWARI|FENGYUN|METEOR[- ]/.test(n) },
+  { id:"comms",    label:"Communications",dot:"#9AA6B2", m:n=>/IRIDIUM|INTELSAT|SES[- ]|EUTELSAT|INMARSAT|GLOBALSTAR|ORBCOMM|TELESAT|VIASAT|ECHOSTAR/.test(n) },
+  { id:"science",  label:"Scientific",    dot:"#57C793", m:n=>/HUBBLE|HST|ISS|TIANGONG|LANDSAT|SENTINEL|TERRA|AQUA|AURA|GRACE|ICESAT|SWOT|JASON|CALIPSO/.test(n) },
+  { id:"military", label:"Military / Gov",dot:"#E86A6A", m:n=>/USA[- ]|COSMOS|KOSMOS|NROL|YAOGAN|OFEQ|SICRAL|SKYNET/.test(n) },
+  { id:"debris",   label:"Debris / R-B",  dot:"#566069", m:n=>/DEB|R\/B/.test(n) },
+  { id:"other",    label:"Other",         dot:"#9AA6B2", m:()=>true },
+];
+/* subdued point color on the globe — near-white, category only tints slightly */
+const POINT_COLOR = { starlink:"#B9C4CE", oneweb:"#B9C4CE", gps:"#9FD9E6", weather:"#E4C089",
+  comms:"#B9C4CE", science:"#98D8BB", military:"#DFA0A0", debris:"#6B7680", other:"#B9C4CE" };
+
+const $ = id => document.getElementById(id);
+const fmt = (n,d=1)=> n==null||isNaN(n) ? "—" : n.toLocaleString("en-US",{maximumFractionDigits:d,minimumFractionDigits:d});
+const fmtInt = n => n==null||isNaN(n) ? "—" : Math.round(n).toLocaleString("en-US");
+
+const S = {
+  sats:[], points:null, viewer:null,
+  activeCats:new Set(CATEGORIES.map(c=>c.id)),
+  query:"", tblQuery:"", tblMode:"visible", tblPage:0,
+  selected:null, followed:null, hovered:null, orbitEntity:null,
+  chart:null, chartMode:"alt",
+  ambient:true, usingFallback:false, lastPropWall:0,
+};
+
+const setLoad = (p,m)=>{ $("load-fill").style.width=p+"%"; if(m) $("load-status").textContent=m; };
+
+setInterval(()=>{ const d=new Date();
+  $("clock-t").textContent = d.toISOString().slice(11,19);
+  $("clock-d").textContent = "UTC · "+d.toISOString().slice(0,10);
+},250);
+
+/* ---------------- Cesium ---------------- */
+async function initViewer(){
+  const baseLayer = Cesium.ImageryLayer.fromProviderAsync(
+    Cesium.TileMapServiceImageryProvider.fromUrl(Cesium.buildModuleUrl("Assets/Textures/NaturalEarthII")));
+  const viewer = new Cesium.Viewer("globe", {
+    baseLayer, baseLayerPicker:false, geocoder:false, homeButton:false, sceneModePicker:false,
+    navigationHelpButton:false, animation:false, timeline:false, fullscreenButton:false,
+    selectionIndicator:false, infoBox:false,
+    skyBox:false,   // starfield is rendered by the DOM-canvas layer behind the scene
+    contextOptions:{ webgl:{ powerPreference:"high-performance", alpha:true } },
+  });
+  const scene = viewer.scene;
+
+  /* High-DPI rendering: by default Cesium renders at CSS-pixel resolution,
+     which looks soft on Retina/4K displays. Render at native device pixels
+     (capped at 2x to keep 4K performant) with MSAA + FXAA for clean edges. */
+  viewer.useBrowserRecommendedResolution = false;
+  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
+  scene.msaaSamples = 4;
+  if(scene.postProcessStages && scene.postProcessStages.fxaa) scene.postProcessStages.fxaa.enabled = true;
+  scene.backgroundColor = Cesium.Color.TRANSPARENT;
+  scene.globe.enableLighting = true;
+  scene.globe.showGroundAtmosphere = true;
+  scene.globe.atmosphereLightIntensity = 14;
+  scene.skyAtmosphere.show = true;
+  scene.skyAtmosphere.brightnessShift = -0.15;
+  scene.globe.baseColor = Cesium.Color.fromCssColorString("#0B1117");
+  scene.screenSpaceCameraController.minimumZoomDistance = 250000;
+  scene.screenSpaceCameraController.maximumZoomDistance = 9e7;
+  S.homeView = Cesium.Cartesian3.fromDegrees(-50, 24, 3.3e7);
+  viewer.camera.setView({ destination: S.homeView });
+
+  scene.postRender.addEventListener(()=>{ if(S.ambient && !S.followed) viewer.camera.rotateRight(-0.00028); });
+  const stop = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+  [["LEFT_DOWN"],["WHEEL"],["PINCH_START"]].forEach(([t])=>
+    stop.setInputAction(()=>setAmbient(false), Cesium.ScreenSpaceEventType[t]));
+
+  addGraticule(viewer);
+  Starfield.attach(viewer);
+  S.viewer = viewer;
+}
+
+/* ============================================================
+   Starfield — screen-space, high-DPI, parallax
+   Rendered on a DOM canvas *behind* a transparent Cesium scene
+   instead of as a skybox cubemap. A cubemap is a GL texture and
+   always goes through minification filtering, so single-pixel
+   stars blur at large window sizes; a screen-space canvas is
+   redrawn at exact devicePixelRatio resolution on every resize,
+   so stars stay pixel-crisp at any window size, including 4K
+   and Retina. Three layers move at different rates with the
+   camera for depth parallax.
+   ============================================================ */
+const Starfield = (() => {
+  const TILE_CSS = 1024;                    // tile size in CSS px (pattern repeats)
+  const MULT = [0.10, 0.30, 0.65];          // parallax factor per layer (far → near)
+  let canvas, ctx, dpr = 1, W = 0, H = 0;
+  let patterns = [], lastX = 0, lastY = 0, dprQuery = null;
+
+  function makeTile(seed, count, cfg){
+    const size = Math.round(TILE_CSS * dpr);
+    const t = document.createElement("canvas");
+    t.width = t.height = size;
+    const c = t.getContext("2d");
+    let s = seed;
+    const rnd = () => { s = (s*1103515245 + 12345) & 0x7fffffff; return s/0x7fffffff; };
+    for(let i=0;i<count;i++){
+      const x = Math.floor(rnd()*size), y = Math.floor(rnd()*size);
+      let tone = "228,235,242";
+      if(cfg.tint){
+        const q = rnd();
+        tone = q<0.12 ? "205,218,255" : q<0.24 ? "255,238,215" : "245,248,255";
+      }
+      c.fillStyle = `rgba(${tone},${cfg.aMin + rnd()*cfg.aVar})`;
+      // star size in *device* pixels — 1px stays 1 physical pixel on any display
+      const sz = Math.max(1, Math.round(cfg.px * (0.75 + rnd()*0.5)));
+      c.fillRect(x, y, sz, sz);
+    }
+    return c.canvas;
+  }
+
+  function rebuild(){
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width  = W + "px";
+    canvas.style.height = H + "px";
+    // densities are per 1024×1024-css-px tile so visual density is resolution-independent
+    const tiles = [
+      makeTile(11,  3400, { aMin:.05, aVar:.20, px:1 }),               // far dust
+      makeTile(97,  1100, { aMin:.30, aVar:.40, px:1 }),               // mid field
+      makeTile(401,  320, { aMin:.62, aVar:.38, px:1.4*dpr/2+0.7, tint:true }), // near bright
+    ];
+    patterns = tiles.map(t => ctx.createPattern(t, "repeat"));
+    draw(lastX, lastY, true);
+    // track DPR changes (window dragged between monitors, browser zoom)
+    if(dprQuery) dprQuery.removeEventListener("change", rebuild);
+    dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    dprQuery.addEventListener("change", rebuild);
+  }
+
+  function draw(px, py, force){
+    if(!force && Math.abs(px-lastX) < 0.4 && Math.abs(py-lastY) < 0.4) return;
+    lastX = px; lastY = py;
+    const T = TILE_CSS * dpr;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let i=0;i<patterns.length;i++){
+      let ox = ((px * MULT[i] * dpr) % T + T) % T;
+      let oy = ((py * MULT[i] * dpr) % T + T) % T;
+      ctx.save();
+      ctx.translate(-ox, -oy);
+      ctx.fillStyle = patterns[i];
+      ctx.fillRect(0, 0, canvas.width + T, canvas.height + T);
+      ctx.restore();
+    }
+  }
+
+  function init(){
+    canvas = $("starfield");
+    ctx = canvas.getContext("2d");
+    rebuild();
+    window.addEventListener("resize", rebuild);
+  }
+
+  /* Parallax follows the camera's geographic position: as the globe rotates
+     or the user pans, layers drift at different rates. */
+  function attach(viewer){
+    viewer.scene.postRender.addEventListener(()=>{
+      const c = viewer.camera.positionCartographic;
+      if(!c) return;
+      draw(c.longitude * W * 0.55, -c.latitude * H * 0.55, false);
+    });
+  }
+
+  return { init, attach };
+})();
+
+function setAmbient(on){
+  S.ambient = on;
+  $("dial").classList.toggle("spinning", on);
+  $("dial-label").textContent = on ? "Rotate" : "Paused";
+}
+
+function addGraticule(viewer){
+  const mat = new Cesium.PolylineDashMaterialProperty({
+    color:Cesium.Color.fromCssColorString("#8A94A0").withAlpha(0.07), dashLength:14 });
+  for(let lat=-60;lat<=60;lat+=30){
+    const pos=[]; for(let lon=-180;lon<=180;lon+=5) pos.push(lon,lat);
+    viewer.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArray(pos),width:1,material:mat}});
+  }
+  for(let lon=-180;lon<180;lon+=30){
+    const pos=[]; for(let lat=-80;lat<=80;lat+=5) pos.push(lon,lat);
+    viewer.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArray(pos),width:1,material:mat}});
+  }
+}
+
+/* ---------------- Data ---------------- */
+const FALLBACK_TLE = `ISS (ZARYA)
+1 25544U 98067A   26001.50000000  .00016717  00000-0  30253-3 0  9990
+2 25544  51.6400 208.9163 0006317  69.9862  25.2906 15.49815320 10450
+HST
+1 20580U 90037B   26001.50000000  .00001520  00000-0  76510-4 0  9995
+2 20580  28.4699 288.8102 0002374 321.7771 038.2723 15.09299865 10021
+NOAA 19
+1 33591U 09005A   26001.50000000  .00000220  00000-0  14410-3 0  9993
+2 33591  99.1917  95.1201 0013580 230.9820 129.0150 14.12501077 10014
+GOES 16
+1 41866U 16071A   26001.50000000 -.00000248  00000-0  00000+0 0  9998
+2 41866   0.0512 275.2811 0000684 156.8623 288.0932  1.00272231 10015
+NAVSTAR 77 (USA 289)
+1 43873U 19004A   26001.50000000  .00000041  00000-0  00000+0 0  9992
+2 43873  55.1590  55.5810 0021181 195.6392 164.2701  2.00563455 10013
+STARLINK-1007
+1 44713U 19074A   26001.50000000  .00012340  00000-0  83210-3 0  9991
+2 44713  53.0537 152.3712 0001453  91.2712 268.8442 15.06391771 10029
+STARLINK-3160
+1 49141U 21082L   26001.50000000  .00002200  00000-0  16500-3 0  9992
+2 49141  70.0002 145.2201 0002901 265.1201  94.9522 14.98330112 10012
+IRIDIUM 106
+1 41917U 17003A   26001.50000000  .00000110  00000-0  32110-4 0  9996
+2 41917  86.3944 122.5512 0002215  89.7712 270.3722 14.34217421 10011
+SENTINEL-2A
+1 40697U 15028A   26001.50000000  .00000320  00000-0  15210-3 0  9994
+2 40697  98.5691  62.1811 0001021  91.4412 268.6902 14.30818312 10017
+COSMOS 2546
+1 45358U 20018A   26001.50000000  .00000060  00000-0  00000+0 0  9990
+2 45358  63.8202 232.1101 6740221 269.7712  18.3402  2.00602715 10018
+METEOR-M2 2
+1 44387U 19038A   26001.50000000  .00000180  00000-0  10210-3 0  9998
+2 44387  98.6522 170.2211 0001301  99.7812 260.3512 14.23821112 10016
+ONEWEB-0102
+1 45134U 20008E   26001.50000000  .00000410  00000-0  10110-2 0  9993
+2 45134  87.8901 118.2212 0001901  95.1201 265.0122 13.16601122 10010`;
+
+/* Some networks block browser requests to CelesTrak (CORS / bot protection),
+   so try the direct endpoint first, then two public CORS relays, then fall
+   back to the embedded sample set. A manual "Load TLE file" path is offered
+   in the status card whenever the live fetch fails. */
+/* Some networks block browser requests to CelesTrak (CORS / bot protection),
+   so try the direct endpoint first, then two public CORS relays, then fall
+   back to the embedded sample set. A manual "Load TLE file" path is offered
+   in the status card whenever the live fetch fails.
+   Note: timeouts use Promise.race rather than AbortController — some browser
+   extensions intercept fetch() and fail trying to structured-clone an
+   AbortSignal, which surfaces as "AbortSignal object could not be cloned"
+   before the request ever reaches the network. */
+function fetchWithTimeout(url, ms){
+  const timeout = new Promise((_, rej) => setTimeout(()=>rej(new Error("timeout")), ms));
+  const req = fetch(url).then(res=>{
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    return res.text();
+  });
+  return Promise.race([req, timeout]);
+}
+
+async function loadCatalog(){
+  /* CelesTrak usage policy: GP data updates once every 2 hours, so cache the
+     catalog locally and skip the network entirely on reloads within that
+     window. This keeps repeat page loads from generating redundant requests. */
+  const CACHE_KEY = "orbital_tle_cache_v1", CACHE_MS = 2*60*60*1000;
+  try{
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if(c && c.raw && (Date.now() - c.t) < CACHE_MS){
+      setLoad(55, "Using cached catalog (< 2 h old)");
+      return parseTLE(c.raw);
+    }
+  }catch(_e){ /* storage unavailable — proceed to network */ }
+
+  const sources = [
+    ["CelesTrak direct", TLE_URL, 20000],
+    ["CelesTrak via relay 1", "https://corsproxy.io/?url="+encodeURIComponent(TLE_URL), 25000],
+    ["CelesTrak via relay 2", "https://api.allorigins.win/raw?url="+encodeURIComponent(TLE_URL), 25000],
+  ];
+  for(const [label,url,ms] of sources){
+    setLoad(28,"Requesting catalog — "+label);
+    try{
+      const raw = await fetchWithTimeout(url, ms);
+      if(raw.length < 500 || raw[0]==="<") throw new Error("bad payload");
+      try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ t:Date.now(), raw })); }catch(_e){}
+      setLoad(55,"Parsing element sets");
+      return parseTLE(raw);
+    }catch(e){
+      console.warn(label+" failed:", e.message);
+      /* CelesTrak policy: on 403/429/50x, M2M clients must stop querying
+         immediately — don't cascade to relays, which hit the same server. */
+      if(/HTTP (403|429|5\d\d)/.test(e.message)){
+        console.warn("Server signaled overload/limit — halting further catalog requests this session.");
+        break;
+      }
+    }
+  }
+  S.usingFallback = true;
+  setLoad(55,"Live sources unreachable — loading sample set");
+  return parseTLE(FALLBACK_TLE);
+}
+
+/* Manual catalog load: user downloads the TLE file themselves and drops it in */
+function loadLocalTLE(text, sourceLabel){
+  const sats = parseTLE(text);
+  if(!sats.length){ toast("No valid TLE sets found in that file","var(--red)"); return; }
+  // tear down current fleet
+  clearOrbit(); closeDetail();
+  if(S.followed!=null) toggleFollow(S.followed);
+  if(S.points){ S.viewer.scene.primitives.remove(S.points); S.points=null; }
+  S.sats = sats; S.usingFallback = false;
+  buildPoints(); buildRail(); renderChart(); refreshStats();
+  S.tblPage = 0; applyVisibility();
+  $("link-label").textContent = sourceLabel;
+  document.querySelector("#link-state .led").style.background = "var(--green)";
+  $("tle-load-row").style.display = "none";
+  layoutRail();
+  toast(`Catalog loaded · ${fmtInt(sats.length)} objects`,"var(--green)");
+}
+
+function parseTLE(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trimEnd()).filter(Boolean);
+  const sats = [];
+  for(let i=0; i<lines.length-2; ){
+    const name=lines[i], l1=lines[i+1], l2=lines[i+2];
+    if(!l1||!l2||l1[0]!=="1"||l2[0]!=="2"){ i++; continue; }
+    i+=3;
+    try{
+      const satrec = satellite.twoline2satrec(l1,l2);
+      if(satrec.error) continue;
+      const upper = name.toUpperCase();
+      const catIdx = CATEGORIES.findIndex(c=>c.m(upper));
+      const nRadMin = satrec.no, period = (2*Math.PI)/nRadMin;
+      const mu=398600.4418, nRadSec=nRadMin/60;
+      const a = Math.cbrt(mu/(nRadSec*nRadSec)), e = satrec.ecco;
+      sats.push({ name, norad:satrec.satnum, intl:l1.slice(9,17).trim(), satrec, catIdx,
+        inc:satrec.inclo*180/Math.PI, period, a, e,
+        apo:a*(1+e)-EARTH_R, per:a*(1-e)-EARTH_R,
+        alt:NaN, vel:NaN, lat:NaN, lon:NaN, visible:true, ok:true });
+      if(sats.length>=MAX_SATS) break;
+    }catch(_e){}
+  }
+  return sats;
+}
+
+/* ---------------- Points + propagation ---------------- */
+function buildPoints(){
+  const col = new Cesium.PointPrimitiveCollection();
+  S.viewer.scene.primitives.add(col);
+  const now = new Date(), gmst = satellite.gstime(now);
+  for(let i=0;i<S.sats.length;i++){
+    const s = S.sats[i];
+    const color = POINT_COLOR[CATEGORIES[s.catIdx].id];
+    const pos = propagateOne(s, now, gmst) || Cesium.Cartesian3.fromDegrees(0,0,5e5);
+    s.point = col.add({ id:i, position:pos,
+      pixelSize: s.catIdx===0 ? 1.5 : 2.1,
+      color: Cesium.Color.fromCssColorString(color).withAlpha(0.8),
+      scaleByDistance: new Cesium.NearFarScalar(2e6,1.7,6e7,0.6),
+      disableDepthTestDistance: 0 });
+  }
+  S.points = col;
+}
+
+function propagateOne(s, date, gmst){
+  const pv = satellite.propagate(s.satrec, date);
+  if(!pv.position || isNaN(pv.position.x)){ s.ok=false; return null; }
+  const ecf = satellite.eciToEcf(pv.position, gmst);
+  const geo = satellite.eciToGeodetic(pv.position, gmst);
+  s.lat = satellite.degreesLat(geo.latitude);
+  s.lon = satellite.degreesLong(geo.longitude);
+  s.alt = geo.height;
+  const v = pv.velocity; s.vel = Math.hypot(v.x,v.y,v.z);
+  return Cesium.Cartesian3.fromElements(ecf.x*1000, ecf.y*1000, ecf.z*1000, s._c3 || (s._c3=new Cesium.Cartesian3()));
+}
+
+function startPropagationLoop(){
+  let cursor=0, cycleDate=new Date(), gmst=satellite.gstime(cycleDate);
+  function step(){
+    if(cursor===0){
+      const now=Date.now();
+      if(now - S.lastPropWall < PROP_INTERVAL_MS){ requestAnimationFrame(step); return; }
+      S.lastPropWall = now; cycleDate=new Date(); gmst=satellite.gstime(cycleDate);
+    }
+    const end = Math.min(cursor+PROP_CHUNK, S.sats.length);
+    for(let i=cursor;i<end;i++){
+      const s=S.sats[i]; if(!s.ok) continue;
+      const pos = propagateOne(s, cycleDate, gmst);
+      if(pos) s.point.position = pos;
+    }
+    cursor = end>=S.sats.length ? 0 : end;
+    if(cursor===0) onFleetTick();
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+let tick=0;
+function onFleetTick(){
+  tick++;
+  if(S.selected!=null){
+    const s = S.sats[S.selected];
+    renderFocus(s);
+    updateLiveFacts(s);
+  }
+  if(S.followed!=null) trackFollowed();
+  if(tick%3===0) renderTable();
+  if(tick%5===0) refreshStats();
+  if(S.view==="conjunctions" && tick%4===0) renderConjTable();
+}
+
+/* ---------------- Visibility ---------------- */
+function applyVisibility(){
+  const q = S.query.trim().toUpperCase();
+  let shown=0;
+  for(const s of S.sats){
+    let vis = S.activeCats.has(CATEGORIES[s.catIdx].id);
+    if(vis && q) vis = s.name.toUpperCase().includes(q) || String(s.norad).includes(q);
+    if(s.visible!==vis){ s.visible=vis; s.point.show=vis; }
+    if(vis) shown++;
+  }
+  $("sc-visible").textContent = fmtInt(shown);
+  S.tblPage = 0; renderTable();
+}
+
+/* ---------------- Rail ---------------- */
+const RAIL_ICONS = {
+  starlink:'<path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="3.5"/>',
+  oneweb:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>',
+  gps:'<path d="M12 21s-6-5.1-6-10a6 6 0 0 1 12 0c0 4.9-6 10-6 10Z"/><circle cx="12" cy="11" r="2"/>',
+  weather:'<path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 2A4 4 0 0 0 7 19h10.5Z"/>',
+  comms:'<path d="M5 12a7 7 0 0 1 14 0M8 12a4 4 0 0 1 8 0"/><circle cx="12" cy="12" r="1.2"/><path d="M12 13v7"/>',
+  science:'<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2.2h12.4a1.5 1.5 0 0 0 1.3-2.2L14 9V3"/>',
+  military:'<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4Z"/>',
+  debris:'<circle cx="6" cy="6" r="1.6"/><circle cx="17" cy="9" r="1.2"/><circle cx="10" cy="15" r="1.4"/><circle cx="18" cy="18" r="1.6"/>',
+  other:'<circle cx="12" cy="12" r="1.6"/><circle cx="5" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+};
+
+function buildRail(){
+  const counts = CATEGORIES.map(()=>0);
+  S.sats.forEach(s=>counts[s.catIdx]++);
+  const wrap = $("rail-cats"); wrap.innerHTML="";
+  CATEGORIES.forEach((c,idx)=>{
+    if(!counts[idx]) return;
+    const b=document.createElement("button");
+    b.className="rail-btn";
+    b.innerHTML = `<span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${RAIL_ICONS[c.id]}</svg></span>
+      <span class="nm">${c.label}</span><span class="ct">${fmtInt(counts[idx])}</span>`;
+    b.onclick = ()=>{
+      if(S.activeCats.has(c.id)) S.activeCats.delete(c.id); else S.activeCats.add(c.id);
+      b.classList.toggle("off");
+      applyVisibility();
+    };
+    b.ondblclick = ()=>{
+      S.activeCats = new Set([c.id]);
+      [...wrap.children].forEach(el=>el.classList.add("off"));
+      b.classList.remove("off");
+      applyVisibility();
+    };
+    wrap.appendChild(b);
+  });
+}
+
+function pushAlert(head, sub, color){
+  const el=document.createElement("div");
+  el.style.cssText="display:flex;gap:9px;font-size:11px;line-height:1.4;animation:rise .35s var(--ease)";
+  el.innerHTML=`<span style="width:2px;border-radius:2px;background:${color};flex:none"></span>
+    <span><span style="display:block;color:var(--text)">${head}</span>
+    <span style="color:var(--faint);font-size:10px">${sub} · ${new Date().toISOString().slice(11,16)}Z</span></span>`;
+  const box=$("rail-alerts"); box.prepend(el);
+  while(box.children.length>5) box.lastChild.remove();
+}
+
+/* synthesized ops events derived from live fleet state */
+const EVENTS = [
+  { c:"var(--amber)", h:()=>"Close approach screen", s:s=>`${short(s.name)} · miss ${fmt(2+Math.random()*18,1)} km`, p:.25 },
+  { c:"var(--muted)", h:()=>"Element set refreshed", s:s=>`${short(s.name)} · NORAD ${s.norad}`, p:.45 },
+  { c:"var(--green)", h:()=>"Telemetry nominal", s:s=>`${short(s.name)} · thermal in limits`, p:.2 },
+  { c:"var(--red)",   h:()=>"Maneuver detected", s:s=>`${short(s.name)} · ΔSMA ${fmt(Math.random()*1.1,2)} km`, p:.1 },
+];
+const short = n => n.length>18 ? n.slice(0,17)+"…" : n;
+
+/* Country of origin — heuristic from name patterns (TLE data carries no owner
+   field, so this is a best-effort estimate and labeled as such in the UI). */
+const COUNTRY_RULES = [
+  [/STARLINK|NAVSTAR|GPS |USA[- ]|NROL|GOES|NOAA|IRIDIUM|GLOBALSTAR|ORBCOMM|VIASAT|ECHOSTAR|LANDSAT|HUBBLE|HST|TERRA|AQUA|AURA|ICESAT|SWOT|LEMUR|FLOCK|PLANET|SPIRE/, "United States"],
+  [/COSMOS|KOSMOS|GLONASS|METEOR[- ]|EXPRESS[- ]|GONETS|SOYUZ|PROGRESS/, "Russia"],
+  [/FENGYUN|YAOGAN|BEIDOU|TIANGONG|GAOFEN|SHIYAN|SHIJIAN|CHINASAT|TIANHUI|JILIN|HAIYANG|ZHUHAI|QIANFAN/, "China"],
+  [/ONEWEB|SKYNET|UKUBE/, "United Kingdom"],
+  [/GALILEO|SENTINEL|METEOSAT|METOP|EUTELSAT|ARIANE/, "Europe (ESA/EU)"],
+  [/GSAT|IRNSS|NAVIC|CARTOSAT|RISAT|INSAT|EOS[- ]|PSLV/, "India"],
+  [/HIMAWARI|QZS|ALOS|GOSAT|HODOYOSHI/, "Japan"],
+  [/OFEQ|AMOS|EROS/, "Israel"],
+  [/KOMPSAT|GEO-KOMPSAT|KPLO/, "South Korea"],
+  [/SICRAL|COSMO-SKYMED/, "Italy"],
+  [/SPOT|PLEIADES|CSO[- ]|HELIOS/, "France"],
+  [/SES[- ]|ASTRA/, "Luxembourg"],
+  [/INMARSAT/, "United Kingdom"],
+  [/INTELSAT/, "United States"],
+  [/TELESAT|RADARSAT|SCISAT/, "Canada"],
+  [/TURKSAT/, "Türkiye"],
+  [/PAKSAT/, "Pakistan"],
+  [/ARABSAT/, "Saudi Arabia"],
+  [/NIGERIASAT/, "Nigeria"],
+];
+function deriveCountry(name){
+  const u = name.toUpperCase();
+  for(const [re,c] of COUNTRY_RULES) if(re.test(u)) return c;
+  return null;
+}
+function emitEvent(){
+  if(!S.sats.length) return;
+  const r=Math.random(); let acc=0, ev=EVENTS[1];
+  for(const e of EVENTS){ acc+=e.p; if(r<=acc){ ev=e; break; } }
+  const s=S.sats[Math.floor(Math.random()*S.sats.length)];
+  pushAlert(ev.h(), ev.s(s), ev.c);
+  // close-approach events also land in the Conjunctions screening queue
+  if(ev===EVENTS[0]){ pushConjunction(); if(S.view==="conjunctions") renderConjTable(); }
+}
+
+/* ---------------- Stats ---------------- */
+function refreshStats(){
+  let n=0, altSum=0, velSum=0;
+  for(const s of S.sats){ if(s.ok && !isNaN(s.alt)){ n++; altSum+=s.alt; velSum+=s.vel; } }
+  $("sc-total").textContent = fmtInt(S.sats.length);
+  $("sc-alt").textContent = n? fmtInt(altSum/n)+" km" : "—";
+  $("sc-vel").textContent = n? fmt(velSum/n,2)+" km/s" : "—";
+}
+
+function orbitClass(s){
+  const m=(s.apo+s.per)/2;
+  if(s.e>0.25) return "HEO";
+  if(m<2000) return "LEO";
+  if(m<34000) return "MEO";
+  return "GEO";
+}
+
+/* ---------------- Table ---------------- */
+const rowsPerPage = () => window.innerWidth >= 2200 ? 6 : 4;
+function tableSource(){
+  const q = S.tblQuery.trim().toUpperCase();
+  const out=[];
+  for(let i=0;i<S.sats.length;i++){
+    const s=S.sats[i];
+    if(!s.visible) continue;
+    if(S.tblMode==="leo" && orbitClass(s)!=="LEO") continue;
+    if(S.tblMode==="geo" && orbitClass(s)!=="GEO") continue;
+    if(q && !s.name.toUpperCase().includes(q) && !String(s.norad).includes(q)) continue;
+    out.push(i);
+  }
+  return out;
+}
+
+function renderTable(){
+  const src = tableSource();
+  const pages = Math.max(1, Math.ceil(src.length/rowsPerPage()));
+  if(S.tblPage >= pages) S.tblPage = pages-1;
+  const start = S.tblPage*rowsPerPage();
+  const slice = src.slice(start, start+rowsPerPage());
+  $("tbl-rows").innerHTML = slice.map(i=>{
+    const s=S.sats[i], cat=CATEGORIES[s.catIdx];
+    return `<div class="trow" data-i="${i}">
+      <span class="id">${s.norad}</span>
+      <span class="nm">${s.name}</span>
+      <span class="r">${fmtInt(s.alt)}</span>
+      <span class="r">${fmt(s.vel,2)}</span>
+      <span class="st"><i style="background:${cat.dot}"></i>${s.ok?"Active":"Lost"}</span>
+    </div>`;
+  }).join("") || `<div style="padding:18px 8px;color:var(--faint);font-size:11.5px">No objects match the current filters</div>`;
+  $("tbl-count").textContent = fmtInt(src.length);
+  $("tbl-range").textContent = src.length ? `${start+1}–${Math.min(start+rowsPerPage(),src.length)} of ${fmtInt(src.length)} objects` : "0 objects";
+  $("tbl-page").textContent = String(S.tblPage+1).padStart(2,"0")+" / "+String(pages).padStart(2,"0");
+  $("pg-prev").disabled = S.tblPage===0;
+  $("pg-next").disabled = S.tblPage>=pages-1;
+}
+
+/* ---------------- Chart ---------------- */
+function buildChart(){
+  Chart.defaults.color = "#566069";
+  Chart.defaults.font.family = "'Inter',sans-serif";
+  Chart.defaults.font.size = 9.5;
+  S.chart = new Chart($("c-main"), {
+    type:"line",
+    data:{ labels:[], datasets:[] },
+    options:{ maintainAspectRatio:false, animation:{duration:300,easing:"easeOutQuart"},
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 3),
+      interaction:{intersect:false,mode:"index"},
+      plugins:{ legend:{display:false},
+        tooltip:{ backgroundColor:"rgba(16,22,29,.92)", borderColor:"rgba(255,255,255,.1)", borderWidth:1,
+          titleFont:{size:10}, bodyFont:{size:10}, padding:10, cornerRadius:10, displayColors:false } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:9} },
+        y:{ grid:{color:"rgba(255,255,255,.05)"}, border:{display:false}, ticks:{maxTicksLimit:5} } } }
+  });
+  renderChart();
+}
+
+function histogram(values, edges){
+  const bins = new Array(edges.length-1).fill(0);
+  for(const v of values){
+    for(let i=1;i<edges.length;i++) if(v<edges[i]){ bins[i-1]++; break; }
+  }
+  return bins;
+}
+
+function renderChart(){
+  const modes = {
+    alt:{ label:"Objects by mean altitude", edges:Array.from({length:25},(_,i)=>200+i*80).concat([36500]),
+      val:s=>(s.apo+s.per)/2, unit:"km", cut:2200 },
+    inc:{ label:"Objects by inclination", edges:Array.from({length:19},(_,i)=>i*10),
+      val:s=>s.inc, unit:"°", cut:null },
+    vel:{ label:"Objects by orbital velocity", edges:Array.from({length:21},(_,i)=>3+i*0.25),
+      val:s=>Math.sqrt(398600.4418/s.a), unit:"km/s", cut:null },
+  };
+  const m = modes[S.chartMode];
+  const all = [], leo = [];
+  for(const s of S.sats){
+    const v = m.val(s);
+    if(m.cut && v > m.cut) continue;   // keep altitude chart readable (LEO band)
+    all.push(v);
+    if(s.catIdx===0 || s.catIdx===1) leo.push(v);   // mega-constellations series
+  }
+  const bins = histogram(all, m.edges);
+  const bins2 = histogram(leo, m.edges);
+  const labels = m.edges.slice(0,-1).map((e,i)=> fmtInt((e+m.edges[i+1])/2));
+
+  S.chart.data.labels = labels;
+  S.chart.data.datasets = [
+    { data:bins, borderColor:"rgba(231,236,242,.85)", borderWidth:1.4, pointRadius:0,
+      tension:.42, fill:true, backgroundColor:ctx=>{
+        const g = ctx.chart.ctx.createLinearGradient(0,0,0,ctx.chart.height);
+        g.addColorStop(0,"rgba(231,236,242,.10)"); g.addColorStop(1,"rgba(231,236,242,0)");
+        return g; } },
+    { data:bins2, borderColor:"rgba(125,214,232,.75)", borderWidth:1.2, pointRadius:0,
+      tension:.42, fill:true, backgroundColor:ctx=>{
+        const g = ctx.chart.ctx.createLinearGradient(0,0,0,ctx.chart.height);
+        g.addColorStop(0,"rgba(125,214,232,.08)"); g.addColorStop(1,"rgba(125,214,232,0)");
+        return g; } },
+  ];
+  S.chart.update();
+  $("chart-legend").innerHTML =
+    `<span class="lg"><i style="background:rgba(231,236,242,.85)"></i>All objects</span>
+     <span class="lg"><i style="background:rgba(125,214,232,.75)"></i>Mega-constellations</span>`;
+}
+
+/* ---------------- Picking / selection / follow ---------------- */
+function initPicking(){
+  const scene=S.viewer.scene;
+  const handler=new Cesium.ScreenSpaceEventHandler(scene.canvas);
+  const tooltip=$("tooltip");
+
+  handler.setInputAction(mv=>{
+    const picked=scene.pick(mv.endPosition);
+    const idx = picked && typeof picked.id==="number" ? picked.id : null;
+    if(idx!==S.hovered){
+      if(S.hovered!=null && S.sats[S.hovered]) resetPointStyle(S.sats[S.hovered]);
+      S.hovered=idx;
+      if(idx!=null){
+        const s=S.sats[idx];
+        s.point.pixelSize=6.5; s.point.color=Cesium.Color.WHITE;
+        document.body.style.cursor="pointer";
+      }else{ document.body.style.cursor=""; tooltip.style.display="none"; }
+    }
+    if(idx!=null){
+      const s=S.sats[idx];
+      tooltip.innerHTML=`<div class="tn">${s.name}</div><div class="tm">${s.norad} · ${fmtInt(s.alt)} km · ${fmt(s.vel,2)} km/s</div>`;
+      tooltip.style.display="block";
+      tooltip.style.left=(mv.endPosition.x+16)+"px";
+      tooltip.style.top=(mv.endPosition.y+12)+"px";
+    }
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+  handler.setInputAction(clk=>{
+    const picked=scene.pick(clk.position);
+    if(picked && typeof picked.id==="number") selectSat(picked.id,false);
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  handler.setInputAction(clk=>{
+    const picked=scene.pick(clk.position);
+    if(picked && typeof picked.id==="number"){ selectSat(picked.id,false); toggleFollow(picked.id); }
+    else if(S.followed!=null) toggleFollow(S.followed);
+  }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+}
+
+function resetPointStyle(s){
+  s.point.pixelSize = s.catIdx===0 ? 1.5 : 2.1;
+  s.point.color = Cesium.Color.fromCssColorString(POINT_COLOR[CATEGORIES[s.catIdx].id]).withAlpha(0.8);
+}
+
+function selectSat(idx, fly=true){
+  const s=S.sats[idx]; if(!s) return;
+  setView("overview");
+  S.selected=idx;
+  drawOrbit(s);
+  renderDetail(s);
+  renderFocus(s);
+  setDetailTab("overview");
+  $("detail").classList.add("open");
+  $("focus-empty").style.display="none";
+  $("focus-metrics").style.display="flex";
+  if(fly) flyTo(s);
+}
+
+function closeDetail(){
+  S.selected=null;
+  Replay.exit();
+  $("detail").classList.remove("open");
+  $("focus-empty").style.display="grid";
+  $("focus-metrics").style.display="none";
+  $("focus-name").textContent="—";
+  clearOrbit();
+}
+
+function setDetailTab(t){
+  document.querySelectorAll(".dtab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+  ["overview","live","replay"].forEach(v=>$("dv-"+v).hidden = v!==t);
+  if(t==="replay" && S.selected!=null) Replay.enter(S.sats[S.selected]);
+  else Replay.exit();
+  if(t==="live" && S.selected!=null){ S._plainAt=0; updateLiveFacts(S.sats[S.selected]); }
+}
+
+function flyTo(s){
+  setAmbient(false);
+  const h=Math.max(s.alt*1000*2.4, 2.5e6);
+  S.viewer.camera.flyTo({
+    destination:Cesium.Cartesian3.fromDegrees(s.lon,s.lat,s.alt*1000+h),
+    duration:1.6, easingFunction:Cesium.EasingFunction.CUBIC_IN_OUT });
+}
+
+function toggleFollow(idx){
+  if(S.followed===idx){
+    S.followed=null;
+    S.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    $("follow-hud").classList.remove("on");
+    $("d-follow").classList.remove("on"); $("d-follow").textContent="Follow";
+    return;
+  }
+  S.followed=idx;
+  setAmbient(false);
+  $("follow-name").textContent=S.sats[idx].name;
+  $("follow-hud").classList.add("on");
+  $("d-follow").classList.add("on"); $("d-follow").textContent="Tracking";
+  trackFollowed();
+}
+
+function trackFollowed(){
+  const s=S.sats[S.followed]; if(!s||!s.ok) return;
+  const transform=Cesium.Transforms.eastNorthUpToFixedFrame(s.point.position);
+  S.viewer.camera.lookAtTransform(transform,
+    new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-30), Math.max(s.alt*1000*1.6, 1.8e6)));
+}
+
+function drawOrbit(s){
+  clearOrbit();
+  const N=160, positions=[], start=new Date();
+  for(let i=0;i<=N;i++){
+    const t=new Date(start.getTime()+(i/N)*s.period*60000);
+    const pv=satellite.propagate(s.satrec,t);
+    if(!pv.position) continue;
+    const g=satellite.gstime(t), e=satellite.eciToEcf(pv.position,g);
+    positions.push(new Cesium.Cartesian3(e.x*1000,e.y*1000,e.z*1000));
+  }
+  S.orbitEntity=S.viewer.entities.add({ polyline:{ positions, width:1.1, arcType:Cesium.ArcType.NONE,
+    material:Cesium.Color.fromCssColorString("#E7ECF2").withAlpha(.45) }});
+}
+function clearOrbit(){ if(S.orbitEntity){ S.viewer.entities.remove(S.orbitEntity); S.orbitEntity=null; } }
+
+/* ============================================================
+   Detail panel — flagship satellite profile
+   Every field is either (a) read directly from the TLE/COSPAR
+   record, (b) derived by orbital mechanics, or (c) a labeled
+   heuristic estimate. Nothing is fabricated; missing metadata
+   is stated as unavailable. The old simulated signal/frequency
+   rows were removed for that reason.
+   ============================================================ */
+
+/* Operator heuristics for well-known constellations — labeled "est." in UI */
+const OPERATOR_RULES = [
+  [/^STARLINK/,"SpaceX"],[/^ONEWEB/,"Eutelsat OneWeb"],[/NAVSTAR|^GPS/,"U.S. Space Force"],
+  [/GLONASS/,"Roscosmos"],[/GALILEO/,"EUSPA / ESA"],[/BEIDOU/,"CNSA"],
+  [/^IRIDIUM/,"Iridium Communications"],[/^NOAA/,"NOAA"],[/^GOES/,"NOAA / NASA"],
+  [/METEOSAT|METOP/,"EUMETSAT"],[/HIMAWARI/,"JMA (Japan)"],[/^SENTINEL/,"ESA / Copernicus"],
+  [/^LANDSAT/,"NASA / USGS"],[/^ISS/,"NASA / Roscosmos / intl. partners"],
+  [/HUBBLE|^HST/,"NASA / ESA"],[/TIANGONG/,"CMSA (China)"],[/^INTELSAT/,"Intelsat"],
+  [/^SES[- ]/,"SES S.A."],[/^EUTELSAT/,"Eutelsat"],[/INMARSAT/,"Viasat (Inmarsat)"],
+  [/GLOBALSTAR/,"Globalstar"],[/ORBCOMM/,"ORBCOMM"],
+];
+function deriveOperator(name){
+  const u = name.toUpperCase();
+  for(const [re,op] of OPERATOR_RULES) if(re.test(u)) return op;
+  return null;
+}
+function cosparYear(s){
+  return s.intl ? ((+s.intl.slice(0,2) > 56 ? "19" : "20") + s.intl.slice(0,2)) : null;
+}
+function cosparFull(s){
+  if(!s.intl) return null;
+  return cosparYear(s) + "-" + s.intl.slice(2);
+}
+
+/* ---- solar position + eclipse test (low-precision, plenty for UI facts) ---- */
+function sunEciUnit(date){
+  const jd = (date.getTime()/86400000) + 2440587.5;
+  const n = jd - 2451545.0;
+  const L = (280.460 + 0.9856474*n) % 360;
+  const g = ((357.528 + 0.9856003*n) % 360) * Math.PI/180;
+  const lam = (L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * Math.PI/180;
+  const eps = 23.439 * Math.PI/180;
+  return { x:Math.cos(lam), y:Math.cos(eps)*Math.sin(lam), z:Math.sin(eps)*Math.sin(lam) };
+}
+/* Cylindrical Earth-shadow model: in shadow if anti-sunward and inside Earth's radius cylinder */
+function inEclipse(posEci, date){
+  const s = sunEciUnit(date);
+  const d = posEci.x*s.x + posEci.y*s.y + posEci.z*s.z;   // km along sun dir
+  if(d > 0) return false;
+  const px = posEci.x - d*s.x, py = posEci.y - d*s.y, pz = posEci.z - d*s.z;
+  return Math.hypot(px,py,pz) < EARTH_R;
+}
+/* step forward until sunlit state flips; returns minutes or null */
+function minutesUntilShadowFlip(s, from, maxMin){
+  const pv0 = satellite.propagate(s.satrec, from);
+  if(!pv0.position) return null;
+  const state0 = inEclipse(pv0.position, from);
+  const stepS = 30;
+  for(let t=stepS; t<=maxMin*60; t+=stepS){
+    const d = new Date(from.getTime() + t*1000);
+    const pv = satellite.propagate(s.satrec, d);
+    if(!pv.position) return null;
+    if(inEclipse(pv.position, d) !== state0) return t/60;
+  }
+  return null;
+}
+
+const region = (lat,lon)=>{
+  const ns = lat>=0 ? "N" : "S", ew = lon>=0 ? "E" : "W";
+  return `${fmt(Math.abs(lat),1)}°${ns}, ${fmt(Math.abs(lon),1)}°${ew}`;
+};
+
+/* ---------------- render: header + tabs ---------------- */
+function renderDetail(s){
+  $("d-name").textContent = s.name;
+  $("d-sub").textContent = `NORAD ${s.norad} · ${orbitClass(s)} · ${CATEGORIES[s.catIdx].label}`;
+  renderGeneral(s);
+  renderSummary(s);
+  renderTimeline(s);
+  renderImagery(s);
+  renderLiveFacts(s, true);
+  $("d-pass-out").innerHTML = "";
+}
+
+function naOr(v, suffix=""){ return v ? v+suffix : `<span class="na">Not in open TLE metadata</span>`; }
+function estTag(v){ return v ? `${v} <span class="est">est.</span>` : null; }
+
+function renderGeneral(s){
+  const yr = cosparYear(s);
+  const rows = [
+    ["Name", s.name],
+    ["NORAD ID", String(s.norad)],
+    ["COSPAR ID", naOr(cosparFull(s))],
+    ["Status", s.ok ? "Active <span class='est'>(in active catalog)</span>" : "Unknown <span class='est'>(no propagation solution)</span>"],
+    ["Operator", naOr(estTag(deriveOperator(s.name)))],
+    ["Country", naOr(estTag(deriveCountry(s.name)))],
+    ["Mission type", CATEGORIES[s.catIdx].label],
+    ["Constellation", s.catIdx<=1 ? CATEGORIES[s.catIdx].label : naOr(null)],
+    ["Launch year", naOr(yr, ` <span class="est">from COSPAR</span>`)],
+    ["Launch date", naOr(null)],
+    ["Launch vehicle", naOr(null)],
+    ["Launch site", naOr(null)],
+    ["Manufacturer", naOr(null)],
+  ];
+  $("d-general").innerHTML = rows.map(([k,v])=>
+    `<div class="d-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+}
+
+/* Rule-based plain-English summary — assembled only from verifiable orbital
+   metadata; explicitly states when public info is unavailable. */
+function renderSummary(s){
+  const cat = CATEGORIES[s.catIdx].id;
+  const oc = orbitClass(s);
+  const yr = cosparYear(s);
+  const op = deriveOperator(s.name);
+  const country = deriveCountry(s.name);
+  const sso = oc==="LEO" && s.inc>96 && s.inc<104;
+  const parts = [];
+
+  const purpose = {
+    starlink:"part of SpaceX's <b>Starlink</b> broadband constellation, designed to deliver low-latency internet access from low Earth orbit",
+    oneweb:"part of the <b>OneWeb</b> constellation, providing satellite broadband connectivity from low Earth orbit",
+    gps:"a <b>navigation satellite</b>, broadcasting timing and positioning signals used by receivers on Earth",
+    weather:"a <b>meteorological satellite</b>, observing weather systems, clouds, and atmospheric conditions",
+    comms:"a <b>communications satellite</b>, relaying voice, data, or broadcast signals",
+    science:"a <b>scientific mission</b>, carrying instruments for research or Earth/space observation",
+    military:"a <b>government or military satellite</b>; details of such missions are typically not publicly disclosed",
+    debris:"a piece of <b>orbital debris or a spent rocket body</b> — no longer an operational spacecraft, but still tracked for collision avoidance",
+    other:"an <b>Earth-orbiting object</b> in the public tracking catalog",
+  }[cat];
+  parts.push(`<b>${s.name}</b> is ${purpose}.`);
+
+  if(op || country){
+    const bits = [];
+    if(op) bits.push(`operated by <b>${op}</b>`);
+    if(country) bits.push(`associated with <b>${country}</b>`);
+    parts.push(`It is likely ${bits.join(" and ")} (estimated from its name and constellation).`);
+  }
+  if(yr) parts.push(`Its COSPAR designator indicates it reached orbit in <b>${yr}</b>.`);
+
+  const orbitDesc = {
+    LEO: sso
+      ? `It flies a <b>sun-synchronous low Earth orbit</b> (~${fmtInt((s.apo+s.per)/2)} km, ${fmt(s.inc,1)}° inclination), passing over locations at a consistent local solar time — the classic profile for Earth-imaging and weather missions.`
+      : `It occupies <b>low Earth orbit</b> at roughly ${fmtInt((s.apo+s.per)/2)} km, circling the planet about every ${fmt(s.period,0)} minutes.`,
+    MEO:`It occupies <b>medium Earth orbit</b> (~${fmtInt((s.apo+s.per)/2)} km) — the regime used by navigation constellations, with a ${fmt(s.period/60,1)}-hour period.`,
+    GEO:`It sits near <b>geostationary altitude</b> (~35,786 km), where its ${fmt(s.period/60,1)}-hour period keeps it roughly fixed over one longitude — ideal for continuous communications or weather coverage.`,
+    HEO:`It follows a <b>highly elliptical orbit</b>, swinging from ${fmtInt(s.per)} km at perigee out to ${fmtInt(s.apo)} km at apogee.`,
+  }[oc];
+  parts.push(orbitDesc);
+
+  parts.push(`<span style="color:var(--faint)">Additional public information (mission specifics, hardware, launch details) is not available in the open TLE catalog this dashboard runs on.</span>`);
+  $("d-summary").innerHTML = parts.join(" ");
+}
+
+/* Timeline: only milestones actually derivable from the data */
+function renderTimeline(s){
+  const yr = cosparYear(s);
+  const epoch = satrecEpochDate(s.satrec);
+  const items = [];
+  if(yr) items.push({ d:yr, t:"Launch to orbit", s:`COSPAR ${cosparFull(s)} — launch #${parseInt(s.intl.slice(2,5),10)||"?"} of ${yr}, object ${s.intl.slice(5)||"A"}.`, hl:true });
+  if(yr) items.push({ d:yr, t:"Orbital deployment", s:"Entered the public tracking catalog following launch." });
+  if(epoch) items.push({ d:epoch.toISOString().slice(0,10), t:"Current element set epoch", s:"Most recent orbit determination in this catalog snapshot.", hl:true });
+  items.push({ d:new Date().toISOString().slice(0,10), t:"Tracked live", s:`Propagating in real time · ${orbitClass(s)} regime, ${fmt(s.period,0)} min period.` });
+  $("d-timeline").innerHTML = items.map(i=>
+    `<div class="tl-item${i.hl?" hl":""}"><div class="tld">${i.d}</div><div class="tlt">${i.t}</div><div class="tls">${i.s}</div></div>`).join("")
+    + `<div class="tl-item"><div class="tlt" style="color:var(--faint);font-size:10.5px;font-style:italic">Further public milestones are not recorded in open TLE data.</div></div>`;
+}
+
+function satrecEpochDate(satrec){
+  try{
+    const y = satrec.epochyr < 57 ? 2000+satrec.epochyr : 1900+satrec.epochyr;
+    return new Date(Date.UTC(y,0,1) + (satrec.epochdays-1)*86400000);
+  }catch(_e){ return null; }
+}
+
+function renderImagery(s){
+  $("d-image").innerHTML = `
+    <div style="text-align:center">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m5 18 5-5 3 3 3.5-3.5L21 17"/></svg>
+      <div class="t">No bundled imagery<br><span style="text-transform:none;letter-spacing:0">Official photos require an online image source; this build ships none to stay offline-safe and license-clean.</span></div>
+    </div>`;
+}
+
+/* ---------------- Live facts ---------------- */
+const FACT_ICONS = {
+  alt:'<path d="M12 19V5m0 0-5 5m5-5 5 5"/>', vel:'<path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/>',
+  per:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>',
+  pos:'<path d="M12 21s-6-5.1-6-10a6 6 0 0 1 12 0c0 4.9-6 10-6 10Z"/><circle cx="12" cy="11" r="2"/>',
+  inc:'<path d="M4 19 19 5M4 19h6M4 19v-6"/>', apo:'<circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="9.5" ry="4.5"/>',
+  day:'<rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M9 3v4m6-4v4"/>',
+  orb:'<circle cx="12" cy="12" r="3.4"/><path d="M19 12a7 7 0 1 1-2-4.9"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8m10.6 10.6 1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>',
+  dist:'<path d="M4 12h16m0 0-4-4m4 4-4 4"/>',
+};
+function factCard(id, label, icon){
+  return `<div class="fact"><div class="fi"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${FACT_ICONS[icon]}</svg><span class="fl">${label}</span></div><div class="fv" id="fact-${id}">—</div></div>`;
+}
+
+function renderLiveFacts(s, rebuild){
+  if(rebuild){
+    $("d-facts").innerHTML =
+      factCard("alt","Altitude","alt") + factCard("vel","Velocity","vel") +
+      factCard("per","Orbital period","per") + factCard("inc","Inclination","inc") +
+      factCard("pos","Position","pos") + factCard("apo","Apogee / Perigee","apo") +
+      factCard("day","Days in orbit","day") + factCard("orb","Est. orbits","orb") +
+      factCard("sun","Illumination","sun") + factCard("dist","Traveled today","dist");
+  }
+  updateLiveFacts(s);
+}
+
+function updateLiveFacts(s){
+  if(S.selected==null || !document.querySelector("#dv-live") ) return;
+  const set = (id,html)=>{ const el=$("fact-"+id); if(el && el.innerHTML!==html){ el.innerHTML=html;
+    el.parentElement.classList.add("pulse"); setTimeout(()=>el.parentElement.classList.remove("pulse"),350); } };
+
+  set("alt", fmtInt(s.alt)+"<small>km</small>");
+  set("vel", fmt(s.vel,2)+"<small>km/s</small>");
+  set("per", fmt(s.period,1)+"<small>min</small>");
+  set("inc", fmt(s.inc,2)+"<small>°</small>");
+  set("pos", `<span style="font-size:11.5px">${region(s.lat,s.lon)}</span>`);
+  set("apo", `<span style="font-size:11.5px">${fmtInt(s.apo)} / ${fmtInt(s.per)}<small>km</small></span>`);
+
+  const yr = cosparYear(s);
+  let days=null, orbits=null;
+  if(yr){
+    days = Math.max(0, Math.round((Date.now() - Date.UTC(+yr,5,30))/86400000)); // mid-year anchor: date unknown
+    orbits = Math.round(days * (1440/s.period));
+    set("day", `~${fmtInt(days)}<small>since ${yr}</small>`);
+    set("orb", `~${fmtInt(orbits)}`);
+  } else { set("day","—"); set("orb","—"); }
+
+  // illumination + distance today
+  const now = new Date();
+  const pv = satellite.propagate(s.satrec, now);
+  let sunlit = null;
+  if(pv.position){ sunlit = !inEclipse(pv.position, now); }
+  set("sun", sunlit==null ? "—" : sunlit
+    ? `<span style="color:var(--amber)">Sunlit</span>`
+    : `<span style="color:var(--blue)">In shadow</span>`);
+  const secToday = (now - Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()))/1000;
+  set("dist", fmtInt(s.vel*secToday)+"<small>km</small>");
+
+  // plain-English facts (throttled — flip search is the costly one)
+  if(!S._plainAt || Date.now()-S._plainAt > 5000){
+    S._plainAt = Date.now();
+    const lines = [];
+    lines.push(`<span class="plain"><i>⚡</i><span>Traveling at <b>${fmtInt(s.vel*3600)} km/h</b> — ${fmt(s.vel/0.343,0)}× the speed of sound.</span></span>`);
+    lines.push(`<span class="plain"><i>◷</i><span>Completes one orbit every <b>${fmt(s.period,0)} minutes</b> (${fmt(1440/s.period,1)} orbits per day).</span></span>`);
+    lines.push(`<span class="plain"><i>◎</i><span>Currently over <b>${region(s.lat,s.lon)}</b>.</span></span>`);
+    if(orbits) lines.push(`<span class="plain"><i>↻</i><span>Has completed roughly <b>${fmtInt(orbits)} orbits</b> of Earth <span style="color:var(--faint)">(estimate from launch year)</span>.</span></span>`);
+    if(sunlit!=null){
+      const flip = minutesUntilShadowFlip(s, now, Math.min(s.period*1.2, 240));
+      lines.push(`<span class="plain"><i>${sunlit?"☀":"◐"}</i><span>${sunlit?"Currently <b>illuminated by the Sun</b>":"Currently <b>in Earth's shadow</b>"}${flip!=null?`; ${sunlit?"enters eclipse":"next sunrise"} in about <b>${fmt(flip,0)} min</b>.`:"."}</span></span>`);
+    }
+    $("d-plain").innerHTML = lines.join("");
+  }
+}
+
+/* ---------------- Pass prediction (opt-in geolocation) ---------------- */
+function predictPass(){
+  const out = $("d-pass-out");
+  if(S.selected==null) return;
+  if(!navigator.geolocation){ out.textContent = "Geolocation is not available in this browser."; return; }
+  out.textContent = "Requesting location…";
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const s = S.sats[S.selected];
+    const obs = { latitude: satellite.degreesToRadians(pos.coords.latitude),
+                  longitude: satellite.degreesToRadians(pos.coords.longitude),
+                  height: (pos.coords.altitude||0)/1000 };
+    out.textContent = "Searching next 24 h…";
+    setTimeout(()=>{
+      const stepS = 30, now = Date.now();
+      let found = null;
+      for(let t=0; t<=86400; t+=stepS){
+        const d = new Date(now + t*1000);
+        const pv = satellite.propagate(s.satrec, d);
+        if(!pv.position) break;
+        const gmst = satellite.gstime(d);
+        const ecf = satellite.eciToEcf(pv.position, gmst);
+        const look = satellite.ecfToLookAngles(obs, ecf);
+        if(look.elevation > 10*Math.PI/180){ found = {d, el:look.elevation*180/Math.PI}; break; }
+      }
+      out.innerHTML = found
+        ? `Next pass above 10° elevation: <b style="color:var(--text)">${found.d.toUTCString().replace("GMT","UTC")}</b> (max checked elevation ${fmt(found.el,0)}°). Computed by SGP4 from your device location — location never leaves your browser.`
+        : "No pass above 10° elevation over your location in the next 24 hours (or the object is geostationary out of view).";
+    }, 30);
+  }, err=>{ out.textContent = "Location permission declined — pass prediction needs your coordinates (they stay in your browser)."; });
+}
+
+/* ---------------- Historical orbit replay ---------------- */
+const Replay = {
+  active:false, playing:false, speed:60, t:1, // t: 0..1 across the window
+  spanMs:0, startMs:0, path:null, marker:null, labels:[], raf:null, lastWall:0,
+
+  enter(s){
+    this.exit();
+    this.active = true;
+    this.spanMs = s.period*60000;
+    this.startMs = Date.now() - this.spanMs;
+    this.t = 1; this.playing = false;
+    setAmbient(false);
+    // historical track (amber, dashed) + timestamp labels at quarter points
+    const N=180, positions=[];
+    for(let i=0;i<=N;i++){
+      const d = new Date(this.startMs + (i/N)*this.spanMs);
+      const pv = satellite.propagate(s.satrec, d);
+      if(!pv.position) continue;
+      const g = satellite.gstime(d), e = satellite.eciToEcf(pv.position, g);
+      positions.push(new Cesium.Cartesian3(e.x*1000, e.y*1000, e.z*1000));
+    }
+    this.path = S.viewer.entities.add({ polyline:{ positions, width:1.6, arcType:Cesium.ArcType.NONE,
+      material:new Cesium.PolylineDashMaterialProperty({ color:Cesium.Color.fromCssColorString("#E8B45A").withAlpha(.75), dashLength:10 }) }});
+    for(let q=0;q<4;q++){
+      const d = new Date(this.startMs + (q/4)*this.spanMs);
+      const pv = satellite.propagate(s.satrec, d);
+      if(!pv.position) continue;
+      const g = satellite.gstime(d), e = satellite.eciToEcf(pv.position, g);
+      this.labels.push(S.viewer.entities.add({
+        position:new Cesium.Cartesian3(e.x*1000,e.y*1000,e.z*1000),
+        point:{ pixelSize:3, color:Cesium.Color.fromCssColorString("#E8B45A").withAlpha(.9) },
+        label:{ text:d.toISOString().slice(11,16)+"Z", font:"10px JetBrains Mono",
+          fillColor:Cesium.Color.fromCssColorString("#8A94A0"), pixelOffset:new Cesium.Cartesian2(0,-14),
+          style:Cesium.LabelStyle.FILL, scale:1 } }));
+    }
+    this.marker = S.viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(0,0,5e5),
+      point:{ pixelSize:9, color:Cesium.Color.fromCssColorString("#E8B45A"),
+        outlineColor:Cesium.Color.fromCssColorString("#070A0D"), outlineWidth:2 } });
+    $("rp-t0").textContent = new Date(this.startMs).toISOString().slice(11,16)+"Z";
+    this.seek(1);
+    this.loop();
+  },
+
+  exit(){
+    this.playing=false; this.active=false;
+    if(this.raf) cancelAnimationFrame(this.raf);
+    if(this.path){ S.viewer.entities.remove(this.path); this.path=null; }
+    if(this.marker){ S.viewer.entities.remove(this.marker); this.marker=null; }
+    this.labels.forEach(l=>S.viewer.entities.remove(l)); this.labels=[];
+    this.setPlayIcon(false);
+  },
+
+  seek(t){
+    if(!this.active || S.selected==null) return;
+    this.t = Math.max(0, Math.min(1, t));
+    const s = S.sats[S.selected];
+    const d = new Date(this.startMs + this.t*this.spanMs);
+    const pv = satellite.propagate(s.satrec, d);
+    if(pv.position){
+      const g = satellite.gstime(d), e = satellite.eciToEcf(pv.position, g);
+      this.marker.position = new Cesium.Cartesian3(e.x*1000, e.y*1000, e.z*1000);
+    }
+    $("rp-slider").value = Math.round(this.t*1000);
+    $("rp-time").textContent = d.toISOString().slice(11,19);
+    $("rp-date").textContent = d.toISOString().slice(0,10)+" UTC · "+this.speed+"× speed";
+  },
+
+  loop(){
+    this.lastWall = performance.now();
+    const step = (now)=>{
+      if(!this.active) return;
+      if(this.playing){
+        const dt = (now - this.lastWall) * this.speed;
+        let nt = this.t + dt/this.spanMs;
+        if(nt >= 1){ nt = 0; }               // wrap for continuous review
+        this.seek(nt);
+      }
+      this.lastWall = now;
+      this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+  },
+
+  setPlayIcon(playing){
+    $("rp-play-ic").innerHTML = playing
+      ? '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>' : '<path d="M8 5v14l11-7z"/>';
+  },
+};
+
+/* ---------------- Focus panel ---------------- */
+function renderFocus(s){
+  $("focus-name").textContent = s.name;
+  $("f-vel").innerHTML = fmt(s.vel,2)+"<small>km/s</small>";
+  $("f-alt").innerHTML = fmtInt(s.alt)+"<small>km</small>";
+  $("f-per").innerHTML = fmt(s.period,0)+"<small>min</small>";
+}
+
+/* ---------------- Search ---------------- */
+function initSearch(){
+  const input=$("search-input"), box=$("results");
+  let deb;
+  input.addEventListener("input",()=>{
+    clearTimeout(deb);
+    deb=setTimeout(()=>{
+      S.query=input.value; applyVisibility();
+      const q=input.value.trim().toUpperCase();
+      if(!q){ box.classList.remove("open"); return; }
+      const hits=[];
+      for(let i=0;i<S.sats.length;i++){
+        const s=S.sats[i];
+        if(s.name.toUpperCase().includes(q)||String(s.norad).includes(q)){ hits.push(i); if(hits.length>=10) break; }
+      }
+      box.innerHTML = hits.length
+        ? hits.map(i=>{ const s=S.sats[i];
+            return `<div class="sr" data-i="${i}"><span class="n">${s.name}</span><span class="m">${s.norad} · ${fmtInt(s.alt)} km</span></div>`; }).join("")
+        : `<div class="sr"><span class="n" style="color:var(--faint)">No matches in catalog</span></div>`;
+      box.classList.add("open");
+    },120);
+  });
+  box.addEventListener("click",e=>{
+    const row=e.target.closest(".sr[data-i]"); if(!row) return;
+    box.classList.remove("open"); input.blur();
+    selectSat(+row.dataset.i,true);
+  });
+  document.addEventListener("click",e=>{
+    if(!e.target.closest("#search-wrap")) box.classList.remove("open");
+  });
+}
+
+/* ---------------- Controls ---------------- */
+function layoutRail(){
+  const card = $("status-card");
+  const rail = $("rail");
+  const top = card.getBoundingClientRect().bottom + 14;
+  rail.style.top = top + "px";
+}
+
+function recenterEarth(){
+  if(S.followed!=null) toggleFollow(S.followed);
+  else S.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  S.viewer.camera.flyTo({ destination: S.homeView, duration: 1.4,
+    easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT });
+  setAmbient(true);
+}
+
+/* ============================================================
+   Full-screen views — Constellations & Conjunctions
+   ============================================================ */
+function setView(v){
+  S.view = v;
+  document.querySelectorAll("#top-tabs .tab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
+  $("view-constellations").classList.toggle("open", v==="constellations");
+  $("view-conjunctions").classList.toggle("open", v==="conjunctions");
+  if(v==="constellations") renderConstTable();
+  if(v==="conjunctions") renderConjTable();
+  if(v!=="overview" && S.selected!=null){ $("detail").classList.remove("open"); }
+  else if(v==="overview" && S.selected!=null){ $("detail").classList.add("open"); }
+}
+
+/* ---- Constellations: comparison computed live from the catalog ---- */
+function constStats(){
+  const g = {};
+  for(const s of S.sats){
+    const c = CATEGORIES[s.catIdx];
+    const o = g[c.id] || (g[c.id] = { cat:c, n:0, alt:0, inc:0, per:0, leo:0, meo:0, geo:0, heo:0, minYr:9999, maxYr:0 });
+    o.n++; o.alt += (s.apo+s.per)/2; o.inc += s.inc; o.per += s.period;
+    o[orbitClass(s).toLowerCase()]++;
+    const yr = +cosparYear(s);
+    if(yr){ if(yr<o.minYr) o.minYr=yr; if(yr>o.maxYr) o.maxYr=yr; }
+  }
+  return Object.values(g).sort((a,b)=>b.n-a.n);
+}
+
+function renderConstTable(){
+  const rows = constStats();
+  const opFor = { starlink:"SpaceX", oneweb:"Eutelsat OneWeb", gps:"Multiple agencies",
+    weather:"NOAA / EUMETSAT / JMA +", comms:"Multiple operators", science:"Space agencies",
+    military:"Government (undisclosed)", debris:"—", other:"Various" };
+  $("const-table").innerHTML = `
+    <thead><tr><th>Constellation / class</th><th>Objects</th><th>Avg alt km</th><th>Avg incl</th>
+    <th>Avg period</th><th>LEO</th><th>MEO</th><th>GEO</th><th>HEO</th>
+    <th>Launch span</th><th>Operator <span class="est" style="text-transform:none">est.</span></th></tr></thead>
+    <tbody>${rows.map(r=>`
+      <tr data-cat="${r.cat.id}">
+        <td class="nm"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${r.cat.dot};margin-right:9px"></span>${r.cat.label}</td>
+        <td>${fmtInt(r.n)}</td>
+        <td>${fmtInt(r.alt/r.n)}</td>
+        <td>${fmt(r.inc/r.n,1)}°</td>
+        <td>${fmt(r.per/r.n,0)} min</td>
+        <td>${fmtInt(r.leo)}</td><td>${fmtInt(r.meo)}</td><td>${fmtInt(r.geo)}</td><td>${fmtInt(r.heo)}</td>
+        <td>${r.minYr<9999 ? r.minYr+"–"+r.maxYr : "—"}</td>
+        <td class="nm" style="color:var(--muted)">${opFor[r.cat.id]||"—"}</td>
+      </tr>`).join("")}</tbody>`;
+  $("const-table").querySelectorAll("tbody tr").forEach(tr=>tr.onclick=()=>{
+    // solo this class on the globe and return to overview
+    const id = tr.dataset.cat;
+    const label = CATEGORIES.find(c=>c.id===id).label;
+    S.activeCats = new Set([id]);
+    buildRail();
+    document.querySelectorAll("#rail-cats .rail-btn").forEach(b=>{
+      const nm = b.querySelector(".nm");
+      b.classList.toggle("off", !nm || nm.textContent !== label);
+    });
+    applyVisibility();
+    setView("overview");
+    toast(`Showing only ${label}`);
+  });
+}
+
+/* ---- Conjunctions: persistent synthesized screening queue ----
+   Clearly labeled SIMULATED: real conjunction assessment requires CDM /
+   SOCRATES data feeds; these events are generated for demonstration with
+   plausible geometry drawn from the live catalog. */
+function seedConjunctions(){
+  S.conjunctions = [];
+  const n = Math.min(16, Math.floor(S.sats.length/2));
+  for(let i=0;i<n;i++) pushConjunction();
+}
+function pushConjunction(){
+  if(S.sats.length<2) return;
+  const a = Math.floor(Math.random()*S.sats.length);
+  let b = Math.floor(Math.random()*S.sats.length);
+  if(b===a) b = (b+1)%S.sats.length;
+  S.conjunctions.push({
+    tca: Date.now() + Math.random()*12*3600*1000,      // time of closest approach (synth)
+    a, b,
+    miss: 0.4 + Math.random()*24,                       // km
+    rvel: 4 + Math.random()*11,                         // km/s
+    pc: Math.pow(10, -(3 + Math.random()*3.5)),         // collision probability (synth)
+  });
+  if(S.conjunctions.length>200) S.conjunctions.shift();
+}
+
+S.conjSort = { key:"pc", dir:-1 };
+function renderConjTable(){
+  if(!S.conjunctions) return;
+  const { key, dir } = S.conjSort;
+  const rows = [...S.conjunctions].sort((x,y)=>(x[key]-y[key])*dir);
+  const head = [["tca","TCA (UTC)"],["a","Primary"],["b","Secondary"],["miss","Miss km"],["rvel","Rel vel km/s"],["pc","Pc"]];
+  const risk = pc => pc>1e-4 ? ["hi","HIGH"] : pc>1e-5 ? ["md","MODERATE"] : ["lo","LOW"];
+  $("conj-table").innerHTML = `
+    <thead><tr>${head.map(([k,l])=>
+      `<th data-k="${k}" class="${key===k?"sorted":""}">${l}${key===k?`<span class="arr">${dir<0?"▼":"▲"}</span>`:""}</th>`).join("")}<th>Risk</th></tr></thead>
+    <tbody>${rows.map(c=>{
+      const [cls,lbl] = risk(c.pc);
+      return `<tr data-a="${c.a}">
+        <td>${new Date(c.tca).toISOString().replace("T"," ").slice(5,19)}</td>
+        <td class="nm">${S.sats[c.a]?.name||"—"}</td>
+        <td class="nm" style="color:var(--muted)">${S.sats[c.b]?.name||"—"}</td>
+        <td>${fmt(c.miss,2)}</td>
+        <td>${fmt(c.rvel,1)}</td>
+        <td>${c.pc.toExponential(1)}</td>
+        <td><span class="risk ${cls}">${lbl}</span></td>
+      </tr>`; }).join("")}</tbody>`;
+  $("conj-table").querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{
+    const k = th.dataset.k;
+    if(!["tca","miss","rvel","pc"].includes(k)) return;
+    S.conjSort = { key:k, dir: S.conjSort.key===k ? -S.conjSort.dir : -1 };
+    renderConjTable();
+  });
+  $("conj-table").querySelectorAll("tbody tr").forEach(tr=>tr.onclick=()=>{
+    setView("overview");
+    selectSat(+tr.dataset.a, true);
+  });
+}
+
+function toast(msg,color="var(--muted)"){
+  const el=document.createElement("div");
+  el.className="toast glass";
+  el.innerHTML=`<span style="width:6px;height:6px;border-radius:50%;background:${color}"></span>${msg}`;
+  $("toasts").appendChild(el);
+  setTimeout(()=>{ el.style.transition="opacity .4s"; el.style.opacity="0"; setTimeout(()=>el.remove(),450); },2800);
+}
+
+function initControls(){
+  $("d-close").onclick=closeDetail;
+  $("d-fly").onclick=()=>{ if(S.selected!=null) flyTo(S.sats[S.selected]); };
+  $("d-follow").onclick=()=>{ if(S.selected!=null) toggleFollow(S.selected); };
+  $("deck-handle").onclick=()=>$("deck").classList.toggle("hidden");
+  $("btn-deck").onclick=()=>$("deck").classList.toggle("hidden");
+  $("dial").onclick=()=>setAmbient(!S.ambient);
+  $("recenter").onclick=recenterEarth;
+  $("btn-full").onclick=()=>{ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); };
+
+  // top navigation views
+  document.querySelectorAll("#top-tabs .tab").forEach(b=>b.onclick=()=>setView(b.dataset.view));
+
+  // detail panel tabs
+  document.querySelectorAll(".dtab").forEach(b=>b.onclick=()=>setDetailTab(b.dataset.t));
+
+  // replay controls
+  $("rp-play").onclick=()=>{ if(!Replay.active) return; Replay.playing=!Replay.playing; Replay.setPlayIcon(Replay.playing); };
+  $("rp-stop").onclick=()=>{ if(!Replay.active) return; Replay.playing=false; Replay.setPlayIcon(false); Replay.seek(0); };
+  $("rp-rw").onclick=()=>{ if(Replay.active) Replay.seek(Replay.t - (5*60000)/Replay.spanMs); };
+  $("rp-ff").onclick=()=>{ if(Replay.active) Replay.seek(Replay.t + (5*60000)/Replay.spanMs); };
+  $("rp-slider").addEventListener("input", e=>{ if(Replay.active) Replay.seek(+e.target.value/1000); });
+  document.querySelectorAll(".sp-btn").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll(".sp-btn").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); Replay.speed = +b.dataset.s;
+    if(Replay.active) $("rp-date").textContent = $("rp-date").textContent.replace(/\d+× speed/, Replay.speed+"× speed");
+  });
+
+  // pass prediction
+  $("d-pass").onclick=predictPass;
+
+  // manual TLE loading: button + drag-and-drop anywhere on the page
+  $("btn-tle").onclick=()=>$("tle-file").click();
+  $("tle-file").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f) return;
+    f.text().then(t=>loadLocalTLE(t,"Local file"));
+    e.target.value="";
+  });
+  document.addEventListener("dragover",e=>e.preventDefault());
+  document.addEventListener("drop",e=>{
+    e.preventDefault();
+    const f=e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) f.text().then(t=>loadLocalTLE(t,"Local file"));
+  });
+
+  document.querySelectorAll("#tbl-tabs .tab").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll("#tbl-tabs .tab").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); S.tblMode=b.dataset.mode; S.tblPage=0; renderTable();
+  });
+  $("tbl-q").addEventListener("input",e=>{ S.tblQuery=e.target.value; S.tblPage=0; renderTable(); });
+  $("pg-prev").onclick=()=>{ S.tblPage--; renderTable(); };
+  $("pg-next").onclick=()=>{ S.tblPage++; renderTable(); };
+  $("tbl-rows").addEventListener("click",e=>{
+    const row=e.target.closest(".trow[data-i]"); if(row) selectSat(+row.dataset.i,true);
+  });
+
+  document.querySelectorAll("#chart-toggle .tab").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll("#chart-toggle .tab").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); S.chartMode=b.dataset.c; renderChart();
+  });
+
+  document.addEventListener("keydown",e=>{
+    if(e.target.tagName==="INPUT"){ if(e.key==="Escape") e.target.blur(); return; }
+    switch(e.key){
+      case "/": e.preventDefault(); $("search-input").focus(); break;
+      case "Escape":
+        if(S.view!=="overview") setView("overview");
+        else if(S.followed!=null) toggleFollow(S.followed);
+        else closeDetail();
+        break;
+      case "a": case "A": $("deck").classList.toggle("hidden"); break;
+      case "f": if(S.selected!=null) toggleFollow(S.selected); break;
+      case "F": if(e.shiftKey) $("btn-full").click(); break;
+      case "r": case "R": setAmbient(!S.ambient); break;
+      case "Home": recenterEarth(); break;
+    }
+  });
+}
+
+/* ---------------- Boot ---------------- */
+(async function boot(){
+  try{
+    setLoad(10,"Initializing render core");
+    Starfield.init();
+    await initViewer();
+    S.sats = await loadCatalog();
+    setLoad(72,`Propagating ${fmtInt(S.sats.length)} objects`);
+    await new Promise(r=>setTimeout(r,30));
+    buildPoints();
+    setLoad(88,"Composing interface");
+    buildRail(); buildChart(); refreshStats(); renderTable();
+    seedConjunctions();
+    S.view = "overview";
+    applyVisibility(); initPicking(); initSearch(); initControls();
+    startPropagationLoop();
+    setInterval(emitEvent, 5200);
+    setTimeout(emitEvent, 1500);
+    $("link-label").textContent = S.usingFallback ? "Sample data" : "CelesTrak live";
+    document.querySelector("#link-state .led").style.background = S.usingFallback ? "var(--amber)" : "var(--green)";
+    if(S.usingFallback) $("tle-load-row").style.display = "block";
+    layoutRail();
+    window.addEventListener("resize", ()=>{ layoutRail(); renderTable(); });
+    setLoad(100,"Link established");
+    setTimeout(()=>$("loader").classList.add("done"), 450);
+    setTimeout(()=>toast(S.usingFallback
+      ? "CelesTrak unreachable — showing embedded sample catalog"
+      : `Catalog synced · ${fmtInt(S.sats.length)} objects`,
+      S.usingFallback ? "var(--amber)" : "var(--green)"), 1300);
+  }catch(err){
+    console.error(err);
+    $("load-status").textContent="Startup failed: "+err.message;
+    $("load-status").style.color="var(--red)";
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
